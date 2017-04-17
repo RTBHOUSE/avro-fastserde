@@ -8,6 +8,10 @@
 
 Current version is **1.0.0**
 
+## Requirements
+
+You need Java 8 to use this library.
+
 ## Installation
 
 Releases are distributed on Maven central:
@@ -66,3 +70,9 @@ import com.rtbhouse.utils.avro.FastSerdeCache;
 FastSerdeCache cache = new FastSerdeCache(compileClassPath);
 FastGenericDatumReader<GenericData.Record> fastGenericDatumReader = new FastGenericDatumReader<>(writerSchema, readerSchema, cache);
 ```
+
+## Limitations
+
+- no support for `reuse` parameter in `DatumReader` interface.
+- no support for `SchemaConstructable` marker interface for specific Avro records.
+- `SpecificDatumReader` will not read data into `GenericRecord`, if the specific classes are not available but will result in CNFE.
