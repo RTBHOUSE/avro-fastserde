@@ -8,7 +8,43 @@
     <packaging>jar</packaging>
 
     <name>avro-fastserde</name>
-    <url>http://rtbhouse.com</url>
+    <url>https://github.com/RTBHOUSE/avro-fastserde</url>
+
+    <description>Fast Apache Avro serialization/deserialization library.
+    </description>
+
+    <licenses>
+        <license>
+            <name>GNU GPL v3</name>
+            <url>http://www.gnu.org/licenses/gpl-3.0.en.html</url>
+        </license>
+    </licenses>
+
+    <developers>
+        <developer>
+            <name>Piotr Jaczewski</name>
+            <email>piotr.jaczewski@rtbhouse.com</email>
+            <organization>RTB HOUSE</organization>
+            <organizationUrl>http://www.rtbhouse.com</organizationUrl>
+        </developer>
+    </developers>
+
+    <scm>
+        <connection>scm:git:git@github.com:RTBHOUSE/avro-fastserde.git</connection>
+        <developerConnection>git@github.com:RTBHOUSE/avro-fastserde.git</developerConnection>
+        <url>git@github.com:RTBHOUSE/avro-fastserde.git</url>
+    </scm>
+
+    <distributionManagement>
+        <snapshotRepository>
+            <id>ossrh</id>
+            <url>https://oss.sonatype.org/content/repositories/snapshots</url>
+        </snapshotRepository>
+        <repository>
+            <id>ossrh</id>
+            <url>https://oss.sonatype.org/service/local/staging/deploy/maven2/</url>
+        </repository>
+    </distributionManagement>
 
     <properties>
         <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
