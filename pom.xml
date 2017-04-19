@@ -4,7 +4,7 @@
 
     <groupId>com.rtbhouse</groupId>
     <artifactId>avro-fastserde</artifactId>
-    <version>0.1-SNAPSHOT</version>
+    <version>1.0.0</version>
     <packaging>jar</packaging>
 
     <name>avro-fastserde</name>
@@ -55,6 +55,8 @@
         <maven.deploy.plugin.version>2.8.2</maven.deploy.plugin.version>
         <maven.compiler.plugin.version>3.6.0</maven.compiler.plugin.version>
         <maven.exec.plugin.version>1.6.0</maven.exec.plugin.version>
+        <maven.javadoc.plugin.version>2.9.1</maven.javadoc.plugin.version>
+        <maven.gpg.plugin.version>1.5</maven.gpg.plugin.version>
         <build.helper.maven.plugin.version>1.12</build.helper.maven.plugin.version>
         <maven.clean.plugin.version>3.0.0</maven.clean.plugin.version>
         <jmh.version>1.18</jmh.version>
@@ -75,6 +77,43 @@
             <properties>
                 <benchmark.skip>false</benchmark.skip>
             </properties>
+        </profile>
+	<profile>
+            <id>release</id>
+            <build>
+                <plugins>
+                    <plugin>
+                        <groupId>org.apache.maven.plugins</groupId>
+                        <artifactId>maven-javadoc-plugin</artifactId>
+                        <version>${maven.javadoc.plugin.version}</version>
+                        <configuration>
+                            <excludePackageNames>com.rtbhouse.utils.generated.avro</excludePackageNames>
+                        </configuration>
+                        <executions>
+                            <execution>
+                                <id>attach-javadocs</id>
+                                <goals>
+                                    <goal>jar</goal>
+                                </goals>
+                            </execution>
+                        </executions>
+                    </plugin>
+                    <plugin>
+                        <groupId>org.apache.maven.plugins</groupId>
+                        <artifactId>maven-gpg-plugin</artifactId>
+                        <version>${maven.gpg.plugin.version}</version>
+                        <executions>
+                            <execution>
+                                <id>sign-artifacts</id>
+                                <phase>verify</phase>
+                                <goals>
+                                    <goal>sign</goal>
+                                </goals>
+                            </execution>
+                        </executions>
+                    </plugin>
+                </plugins>
+            </build>
         </profile>
     </profiles>
 
