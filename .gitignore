@@ -1,0 +1,14 @@
+bin/
+target/
+test-output/
+.settings/
+*.iml
+.idea/
+.idea/*
+.project
+.classpath
+
+src/test/generated/
+
+nb*.xml
+
