@@ -1,6 +1,6 @@
 # avro-fastserde
 
-**avro-fastserde** is an alternative approach to [Apache Avro](http://avro.apache.org/) serialization and deserialization. It generates dedicated code responsible for handling serialization and deserialization, which achieves better performance results than native implementation.   
+**avro-fastserde** is an alternative approach to [Apache Avro](http://avro.apache.org/) serialization and deserialization. It generates dedicated code responsible for handling serialization and deserialization, which achieves better performance results than native implementation. Learn more [here](http://techblog.rtbhouse.com/2017/04/18/fast-avro/).  
 
 ![build status](https://api.travis-ci.org/RTBHOUSE/avro-fastserde.svg?branch=master)
 
@@ -73,6 +73,7 @@ FastGenericDatumReader<GenericData.Record> fastGenericDatumReader = new FastGene
 
 ## Limitations
 
+- no support for schema default values.
 - no support for `reuse` parameter in `DatumReader` interface.
 - no support for `SchemaConstructable` marker interface for specific Avro records.
 - `FastSpecificDatumReader` will not read data into `GenericRecord` if the specific classes are not available but will result in compilation failure and fall back to default `SpecificDatumReader` implementation.
