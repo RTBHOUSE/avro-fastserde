@@ -178,13 +178,24 @@ public class FastDeserializerGenerator<T> extends FastDeserializerGeneratorBase<
 
         if (doesNotContainMethod(record, recordAction.getShouldRead())) {
             JMethod method = createMethod(record, recordAction.getShouldRead());
-            body.assign(containerVariable,
+
+            if (containerVariable != null) {
+                body.assign(containerVariable,
                     JExpr.invoke(getMethod(record, recordAction.getShouldRead())).arg(JExpr.direct(DECODER)));
+
+            } else {
+                body.invoke(getMethod(record, recordAction.getShouldRead())).arg(JExpr.direct(DECODER));
+            }
 
             body = method.body();
         } else {
-            body.assign(containerVariable,
+            if (containerVariable != null) {
+                body.assign(containerVariable,
                     JExpr.invoke(getMethod(record, recordAction.getShouldRead())).arg(JExpr.direct(DECODER)));
+
+            } else {
+                body.invoke(getMethod(record, recordAction.getShouldRead())).arg(JExpr.direct(DECODER));
+            }
 
             // seek through actionIterator
             for (Schema.Field field : record.getFields()) {

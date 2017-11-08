@@ -3,6 +3,7 @@ package com.rtbhouse.utils.avro;
 import java.io.File;
 import java.io.IOException;
 import java.lang.reflect.Field;
+import java.util.Collections;
 import java.util.ListIterator;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
@@ -74,9 +75,16 @@ public abstract class FastDeserializerGeneratorBase<T> {
     }
 
     protected ListIterator<Symbol> actionIterator(FieldAction action) {
-        ListIterator<Symbol> actionIterator = action.getSymbolIterator() != null ? action
-                .getSymbolIterator() : Lists.newArrayList(reverseSymbolArray(action.getSymbol().production))
+        ListIterator<Symbol> actionIterator = null;
+
+        if (action.getSymbolIterator() != null) {
+            actionIterator = action.getSymbolIterator();
+        } else if (action.getSymbol().production != null) {
+            actionIterator = Lists.newArrayList(reverseSymbolArray(action.getSymbol().production))
                 .listIterator();
+        } else {
+            actionIterator = Collections.emptyListIterator();
+        }
 
         while (actionIterator.hasNext()) {
             Symbol symbol = actionIterator.next();
@@ -106,6 +114,14 @@ public abstract class FastDeserializerGeneratorBase<T> {
         Symbol fieldSymbol = END_SYMBOL;
 
         if (Schema.Type.RECORD.equals(type)) {
+            if (symbolIterator.hasNext()) {
+                fieldSymbol = symbolIterator.next();
+                if (fieldSymbol  instanceof Symbol.SkipAction) {
+                    return FieldAction.fromValues(type, false, fieldSymbol);
+                } else {
+                    symbolIterator.previous();
+                }
+            }
             return FieldAction.fromValues(type, true, symbolIterator);
         }
 

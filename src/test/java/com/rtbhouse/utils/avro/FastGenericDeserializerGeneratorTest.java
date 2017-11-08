@@ -6,6 +6,7 @@ import static com.rtbhouse.utils.avro.FastSerdeTestsSupport.createEnumSchema;
 import static com.rtbhouse.utils.avro.FastSerdeTestsSupport.createField;
 import static com.rtbhouse.utils.avro.FastSerdeTestsSupport.createFixedSchema;
 import static com.rtbhouse.utils.avro.FastSerdeTestsSupport.createMapFieldSchema;
+import static com.rtbhouse.utils.avro.FastSerdeTestsSupport.createPrimitiveFieldSchema;
 import static com.rtbhouse.utils.avro.FastSerdeTestsSupport.createPrimitiveUnionFieldSchema;
 import static com.rtbhouse.utils.avro.FastSerdeTestsSupport.createRecord;
 import static com.rtbhouse.utils.avro.FastSerdeTestsSupport.createUnionField;
@@ -384,6 +385,96 @@ public class FastGenericDeserializerGeneratorTest {
         Assert.assertEquals("ghi",
             ((Map<String, GenericRecord>) record.get("subRecordMap")).get("1").get("testNotRemoved2"));
     }
+
+    @Test
+    public void shouldSkipRemovedRecord() {
+        // given
+        Schema subRecord1Schema = createRecord("subRecord",
+            createPrimitiveFieldSchema("test1", Schema.Type.STRING),
+            createPrimitiveFieldSchema("test2", Schema.Type.STRING));
+        Schema subRecord2Schema = createRecord("subRecord2",
+            createPrimitiveFieldSchema("test1", Schema.Type.STRING),
+            createPrimitiveFieldSchema("test2", Schema.Type.STRING));
+
+        Schema record1Schema = createRecord("test",
+            createField("subRecord1", subRecord1Schema),
+            createField("subRecord2", subRecord2Schema),
+            createUnionField("subRecord3", subRecord2Schema),
+            createField("subRecord4", subRecord1Schema));
+
+        Schema record2Schema = createRecord("test",
+            createField("subRecord1", subRecord1Schema),
+            createField("subRecord4", subRecord1Schema));
+
+        GenericRecordBuilder subRecordBuilder = new GenericRecordBuilder(subRecord1Schema);
+        subRecordBuilder.set("test1", "abc");
+        subRecordBuilder.set("test2", "def");
+
+        GenericRecordBuilder subRecordBuilder2 = new GenericRecordBuilder(subRecord2Schema);
+        subRecordBuilder2.set("test1", "ghi");
+        subRecordBuilder2.set("test2", "jkl");
+
+        GenericRecordBuilder builder = new GenericRecordBuilder(record1Schema);
+        builder.set("subRecord1", subRecordBuilder.build());
+        builder.set("subRecord2", subRecordBuilder2.build());
+        builder.set("subRecord3", subRecordBuilder2.build());
+        builder.set("subRecord4", subRecordBuilder.build());
+
+        // when
+        GenericRecord record = decodeRecord(record1Schema, record2Schema, genericDataAsDecoder(builder.build()));
+
+        // then
+        Assert.assertEquals("abc", ((GenericRecord) record.get("subRecord1")).get("test1"));
+        Assert.assertEquals("def", ((GenericRecord) record.get("subRecord1")).get("test2"));
+        Assert.assertEquals("abc", ((GenericRecord) record.get("subRecord4")).get("test1"));
+        Assert.assertEquals("def", ((GenericRecord) record.get("subRecord4")).get("test2"));
+    }
+
+    @Test
+    public void shouldSkipRemovedNestedRecord() {
+        // given
+        Schema subSubRecordSchema = createRecord("subSubRecord",
+            createPrimitiveFieldSchema("test1", Schema.Type.STRING),
+            createPrimitiveFieldSchema("test2", Schema.Type.STRING));
+        Schema subRecord1Schema = createRecord("subRecord",
+            createPrimitiveFieldSchema("test1", Schema.Type.STRING),
+            createField("test2", subSubRecordSchema),
+            createUnionField("test3", subSubRecordSchema),
+            createPrimitiveFieldSchema("test4", Schema.Type.STRING));
+        Schema subRecord2Schema = createRecord("subRecord",
+            createPrimitiveFieldSchema("test1", Schema.Type.STRING),
+            createPrimitiveFieldSchema("test4", Schema.Type.STRING));
+
+
+        Schema record1Schema = createRecord("test",
+            createField("subRecord", subRecord1Schema));
+
+        Schema record2Schema = createRecord("test",
+            createField("subRecord", subRecord2Schema));
+
+        GenericRecordBuilder subSubRecordBuilder = new GenericRecordBuilder(subSubRecordSchema);
+        subSubRecordBuilder.set("test1", "abc");
+        subSubRecordBuilder.set("test2", "def");
+
+
+        GenericRecordBuilder subRecordBuilder = new GenericRecordBuilder(subRecord1Schema);
+        subRecordBuilder.set("test1", "abc");
+        subRecordBuilder.set("test2", subSubRecordBuilder.build());
+        subRecordBuilder.set("test3", subSubRecordBuilder.build());
+        subRecordBuilder.set("test4", "def");
+
+
+        GenericRecordBuilder builder = new GenericRecordBuilder(record1Schema);
+        builder.set("subRecord", subRecordBuilder.build());
+
+        // when
+        GenericRecord record = decodeRecord(record1Schema, record2Schema, genericDataAsDecoder(builder.build()));
+
+        // then
+        Assert.assertEquals("abc", ((GenericRecord) record.get("subRecord")).get("test1"));
+        Assert.assertEquals("def", ((GenericRecord) record.get("subRecord")).get("test4"));
+    }
+
 
     @Test
     public void shouldReadMultipleChoiceUnion() {
