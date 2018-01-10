@@ -58,8 +58,7 @@ public abstract class FastDeserializerGeneratorBase<T> {
         if (compileClassPath != null) {
             compileResult = compiler.run(null, null, null,
                     "-cp", compileClassPath,
-                    destination.getAbsolutePath() + GENERATED_SOURCES_PATH + className + ".java"
-                    );
+                    destination.getAbsolutePath() + GENERATED_SOURCES_PATH + className + ".java");
         } else {
             compileResult = compiler.run(null, null, null, destination.getAbsolutePath()
                     + GENERATED_SOURCES_PATH
@@ -81,7 +80,7 @@ public abstract class FastDeserializerGeneratorBase<T> {
             actionIterator = action.getSymbolIterator();
         } else if (action.getSymbol().production != null) {
             actionIterator = Lists.newArrayList(reverseSymbolArray(action.getSymbol().production))
-                .listIterator();
+                    .listIterator();
         } else {
             actionIterator = Collections.emptyListIterator();
         }
@@ -101,6 +100,22 @@ public abstract class FastDeserializerGeneratorBase<T> {
         return actionIterator;
     }
 
+    protected boolean seekToDefault(ListIterator<Symbol> symbolIterator) {
+        Symbol symbol;
+        while (symbolIterator.hasNext()) {
+            symbol = symbolIterator.next();
+
+            if (symbol instanceof Symbol.ErrorAction) {
+                throw new FastDeserializerGeneratorException(((Symbol.ErrorAction) symbol).msg);
+            }
+
+            if (symbol instanceof Symbol.DefaultStartAction) {
+                return true;
+            }
+        }
+        return false;
+    }
+
     protected FieldAction seekFieldAction(boolean shouldReadCurrent, Schema.Field field,
             ListIterator<Symbol> symbolIterator) {
 
@@ -116,7 +131,7 @@ public abstract class FastDeserializerGeneratorBase<T> {
         if (Schema.Type.RECORD.equals(type)) {
             if (symbolIterator.hasNext()) {
                 fieldSymbol = symbolIterator.next();
-                if (fieldSymbol  instanceof Symbol.SkipAction) {
+                if (fieldSymbol instanceof Symbol.SkipAction) {
                     return FieldAction.fromValues(type, false, fieldSymbol);
                 } else {
                     symbolIterator.previous();

@@ -73,7 +73,6 @@ FastGenericDatumReader<GenericData.Record> fastGenericDatumReader = new FastGene
 
 ## Limitations
 
-- no support for schema default values.
 - no support for `reuse` parameter in `DatumReader` interface.
 - no support for `SchemaConstructable` marker interface for specific Avro records.
 - `FastSpecificDatumReader` will not read data into `GenericRecord` if the specific classes are not available but will result in compilation failure and fall back to default `SpecificDatumReader` implementation.
