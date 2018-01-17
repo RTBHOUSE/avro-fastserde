@@ -20,7 +20,6 @@ import org.apache.avro.io.parsing.ResolvingGrammarGenerator;
 import org.apache.avro.io.parsing.Symbol;
 import org.apache.commons.lang3.StringUtils;
 import org.codehaus.jackson.JsonNode;
-import org.codehaus.jackson.node.ArrayNode;
 
 import com.sun.codemodel.JArray;
 import com.sun.codemodel.JBlock;
@@ -63,7 +62,6 @@ public class FastDeserializerGenerator<T> extends FastDeserializerGeneratorBase<
 
         try {
             deserializerClass = classPackage._class(className);
-            deserializerClass.annotate(SuppressWarnings.class).param("value", "unchecked");
 
             JFieldVar readerSchemaField = deserializerClass.field(JMod.PRIVATE | JMod.FINAL, Schema.class,
                     "readerSchema");
@@ -319,11 +317,48 @@ public class FastDeserializerGenerator<T> extends FastDeserializerGeneratorBase<
         }
     }
 
+    private JType getDefaultElementType(Schema containerSchema) {
+        Schema elementSchema;
+        if (containerSchema.getType() == Schema.Type.ARRAY) {
+            elementSchema = containerSchema.getElementType();
+        } else if (containerSchema.getType() == Schema.Type.MAP) {
+            elementSchema = containerSchema.getValueType();
+        } else {
+            throw new FastDeserializerGeneratorException("Can't find element type for non-container schema!");
+        }
+
+        if (elementSchema.getType() == Schema.Type.UNION) {
+            elementSchema = elementSchema.getTypes().get(0);
+        }
+
+        if (elementSchema.getType() == Schema.Type.NULL) {
+            return codeModel.ref(Object.class);
+        } else if (elementSchema.getType() == Schema.Type.ARRAY) {
+            if (useGenericTypes) {
+                return codeModel.ref(GenericData.Array.class).narrow(getDefaultElementType(elementSchema));
+            } else {
+                return codeModel.ref(ArrayList.class).narrow(getDefaultElementType(elementSchema));
+            }
+        } else if (elementSchema.getType() == Schema.Type.MAP) {
+            return codeModel.ref(Map.class).narrow(String.class).narrow(getDefaultElementType(elementSchema));
+        } else {
+            if (useGenericTypes) {
+                if (elementSchema.getType() == Schema.Type.ENUM) {
+                    return codeModel.ref(GenericData.EnumSymbol.class);
+                } else if (elementSchema.getType() == Schema.Type.RECORD) {
+                    return codeModel.ref(GenericData.Record.class);
+                } else if (elementSchema.getType() == Schema.Type.FIXED) {
+                    return codeModel.ref(GenericData.Fixed.class);
+                }
+            }
+            return codeModel.ref(elementSchema.getFullName());
+        }
+    }
+
     private JExpression parseDefaultValue(Schema schema, JsonNode defaultValue, JBlock body, JVar schemaVariable,
             String fieldName) {
         Schema.Type schemaType = schema.getType();
-
-        // Default value of union have to have first type from union
+        // The default value of union is of the first defined type
         if (schemaType == Schema.Type.UNION) {
             schema = schema.getTypes().get(0);
             schemaType = schema.getType();
@@ -359,11 +394,26 @@ public class FastDeserializerGenerator<T> extends FastDeserializerGeneratorBase<
 
         } else if (schemaType == Schema.Type.ARRAY) {
             Schema elementSchema = schema.getElementType();
-            JVar arrayVar = body.decl(codeModel.ref(ArrayList.class), getVariableName("defaultArray"),
-                    JExpr._new(codeModel.ref(ArrayList.class)));
+            JType elementType = getDefaultElementType(schema);
             JVar elementSchemaVariable = declareSchemaVariableForCollectionElement(fieldName + "Element",
                     elementSchema, schemaVariable);
-            for (JsonNode arrayEntryValue : (ArrayNode) defaultValue) {
+            JVar arrayVar;
+            if (useGenericTypes) {
+                JInvocation getSchema = schemaMapField.invoke("get").arg(JExpr.lit(getSchemaId(schema)));
+                int elementCount = defaultValue.size();
+
+                arrayVar = body.decl(codeModel.ref(GenericData.Array.class).narrow(elementType),
+                        getVariableName("defaultArray"),
+                        JExpr._new(codeModel.ref(GenericData.Array.class).narrow(elementType))
+                                .arg(JExpr.lit(elementCount)).arg(getSchema));
+
+            } else {
+                arrayVar = body
+                        .decl(codeModel.ref(ArrayList.class).narrow(elementType), getVariableName("defaultArray"),
+                                JExpr._new(codeModel.ref(ArrayList.class).narrow(elementType)));
+            }
+
+            for (JsonNode arrayEntryValue : defaultValue) {
                 JExpression fieldValue = parseDefaultValue(elementSchema, arrayEntryValue, body, elementSchemaVariable,
                         "arrayValue");
                 body.invoke(arrayVar, "add").arg(fieldValue);
@@ -371,8 +421,10 @@ public class FastDeserializerGenerator<T> extends FastDeserializerGeneratorBase<
             return arrayVar;
 
         } else if (schemaType == Schema.Type.MAP) {
-            JVar mapVar = body.decl(codeModel.ref(Map.class), getVariableName("defaultMap"),
-                    JExpr._new(codeModel.ref(HashMap.class)));
+            JType elementType = getDefaultElementType(schema);
+            JVar mapVar = body.decl(codeModel.ref(Map.class).narrow(codeModel.ref(String.class)).narrow(elementType),
+                    getVariableName("defaultMap"),
+                    JExpr._new(codeModel.ref(HashMap.class).narrow(codeModel.ref(String.class)).narrow(elementType)));
             JVar elementSchemaVariable = declareSchemaVariableForCollectionElement(fieldName + "Value",
                     schema.getValueType(), schemaVariable);
             for (Iterator<Map.Entry<String, JsonNode>> it = defaultValue.getFields(); it.hasNext(); ) {
