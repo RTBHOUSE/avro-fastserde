@@ -219,11 +219,7 @@ public class FastDeserializerGenerator<T> extends FastDeserializerGeneratorBase<
             Set<String> fieldNamesSet = record.getFields().stream().map(Schema.Field::name).collect(Collectors.toSet());
             for (Schema.Field readerField : readerRecord.getFields()) {
                 if (!fieldNamesSet.contains(readerField.name())) {
-                    boolean success = seekToDefault(actionIterator);
-                    if (!success) {
-                        throw new FastDeserializerGeneratorException(
-                                "No default value defined for new field: " + readerField.name());
-                    }
+                    forwardToExpectedDefault(actionIterator);
                     seekFieldAction(true, readerField, actionIterator);
                 }
             }
@@ -293,12 +289,7 @@ public class FastDeserializerGenerator<T> extends FastDeserializerGeneratorBase<
             Set<String> fieldNamesSet = record.getFields().stream().map(Schema.Field::name).collect(Collectors.toSet());
             for (Schema.Field readerField : readerRecord.getFields()) {
                 if (!fieldNamesSet.contains(readerField.name())) {
-                    boolean success = seekToDefault(actionIterator);
-                    if (!success || readerField.defaultValue() == null) {
-                        throw new FastDeserializerGeneratorException(
-                                "No default value defined for new field: " + readerField.name());
-                    }
-
+                    forwardToExpectedDefault(actionIterator);
                     seekFieldAction(true, readerField, actionIterator);
                     JVar schemaVar = null;
                     if (useGenericTypes) {

@@ -100,7 +100,7 @@ public abstract class FastDeserializerGeneratorBase<T> {
         return actionIterator;
     }
 
-    protected boolean seekToDefault(ListIterator<Symbol> symbolIterator) {
+    protected void forwardToExpectedDefault(ListIterator<Symbol> symbolIterator) {
         Symbol symbol;
         while (symbolIterator.hasNext()) {
             symbol = symbolIterator.next();
@@ -110,10 +110,10 @@ public abstract class FastDeserializerGeneratorBase<T> {
             }
 
             if (symbol instanceof Symbol.DefaultStartAction) {
-                return true;
+                return;
             }
         }
-        return false;
+        throw new FastDeserializerGeneratorException("DefaultStartAction symbol expected!");
     }
 
     protected FieldAction seekFieldAction(boolean shouldReadCurrent, Schema.Field field,
