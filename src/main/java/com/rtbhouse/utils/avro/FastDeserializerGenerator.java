@@ -308,44 +308,6 @@ public class FastDeserializerGenerator<T> extends FastDeserializerGeneratorBase<
         }
     }
 
-    private JType getDefaultElementType(Schema containerSchema) {
-        Schema elementSchema;
-        if (containerSchema.getType() == Schema.Type.ARRAY) {
-            elementSchema = containerSchema.getElementType();
-        } else if (containerSchema.getType() == Schema.Type.MAP) {
-            elementSchema = containerSchema.getValueType();
-        } else {
-            throw new FastDeserializerGeneratorException("Can't find element type for non-container schema!");
-        }
-
-        if (elementSchema.getType() == Schema.Type.UNION) {
-            elementSchema = elementSchema.getTypes().get(0);
-        }
-
-        if (elementSchema.getType() == Schema.Type.NULL) {
-            return codeModel.ref(Object.class);
-        } else if (elementSchema.getType() == Schema.Type.ARRAY) {
-            if (useGenericTypes) {
-                return codeModel.ref(GenericData.Array.class).narrow(getDefaultElementType(elementSchema));
-            } else {
-                return codeModel.ref(ArrayList.class).narrow(getDefaultElementType(elementSchema));
-            }
-        } else if (elementSchema.getType() == Schema.Type.MAP) {
-            return codeModel.ref(Map.class).narrow(String.class).narrow(getDefaultElementType(elementSchema));
-        } else {
-            if (useGenericTypes) {
-                if (elementSchema.getType() == Schema.Type.ENUM) {
-                    return codeModel.ref(GenericData.EnumSymbol.class);
-                } else if (elementSchema.getType() == Schema.Type.RECORD) {
-                    return codeModel.ref(GenericData.Record.class);
-                } else if (elementSchema.getType() == Schema.Type.FIXED) {
-                    return codeModel.ref(GenericData.Fixed.class);
-                }
-            }
-            return codeModel.ref(elementSchema.getFullName());
-        }
-    }
-
     private JExpression parseDefaultValue(Schema schema, JsonNode defaultValue, JBlock body, JVar schemaVariable,
             String fieldName) {
         Schema.Type schemaType = schema.getType();
@@ -385,7 +347,7 @@ public class FastDeserializerGenerator<T> extends FastDeserializerGeneratorBase<
 
         } else if (schemaType == Schema.Type.ARRAY) {
             Schema elementSchema = schema.getElementType();
-            JType elementType = getDefaultElementType(schema);
+            JClass elementType = classFromArraySchemaElementType(schema);
             JVar elementSchemaVariable = declareSchemaVariableForCollectionElement(fieldName + "Element",
                     elementSchema, schemaVariable);
             JVar arrayVar;
@@ -412,7 +374,7 @@ public class FastDeserializerGenerator<T> extends FastDeserializerGeneratorBase<
             return arrayVar;
 
         } else if (schemaType == Schema.Type.MAP) {
-            JType elementType = getDefaultElementType(schema);
+            JClass elementType = classFromMapSchemaElementType(schema);
             JVar mapVar = body.decl(codeModel.ref(Map.class).narrow(codeModel.ref(String.class)).narrow(elementType),
                     getVariableName("defaultMap"),
                     JExpr._new(codeModel.ref(HashMap.class).narrow(codeModel.ref(String.class)).narrow(elementType)));
