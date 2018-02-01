@@ -6,7 +6,7 @@
 
 ## Version
 
-Current version is **1.0.0**
+Current version is **1.0.1**
 
 ## Requirements
 
@@ -20,7 +20,7 @@ Releases are distributed on Maven central:
 <dependency>
     <groupId>com.rtbhouse</groupId>
     <artifactId>avro-fastserde</artifactId>
-    <version>1.0.0</version>
+    <version>1.0.1</version>
 </dependency>
 ```
 
