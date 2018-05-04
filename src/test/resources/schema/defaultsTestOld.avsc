@@ -5,8 +5,22 @@
   "doc": null,
   "fields": [
     {
-      "name": "oldInt",
-      "type": "int"
+      "name": "oldSubRecord",
+      "type": {
+          "type": "record",
+          "name": "OldSubRecord",
+          "doc": null,
+          "fields": [
+            {
+              "name": "oldSubField",
+              "type": "string"
+            },
+            {
+              "name": "fieldToBeRemoved",
+              "type": "int"
+            }
+          ]
+       }
     }
   ]
 }

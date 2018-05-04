@@ -4,6 +4,7 @@ import static com.rtbhouse.utils.avro.FastSerdeTestsSupport.genericDataAsDecoder
 
 import java.io.File;
 import java.io.IOException;
+import java.math.BigInteger;
 import java.net.URL;
 import java.net.URLClassLoader;
 import java.nio.ByteBuffer;
@@ -32,6 +33,7 @@ import com.rtbhouse.utils.generated.avro.DefaultsFixed;
 import com.rtbhouse.utils.generated.avro.DefaultsNewEnum;
 import com.rtbhouse.utils.generated.avro.DefaultsSubRecord;
 import com.rtbhouse.utils.generated.avro.DefaultsTestRecord;
+import com.rtbhouse.utils.generated.avro.OldSubRecord;
 import com.rtbhouse.utils.generated.avro.TestRecord;
 
 public class FastDeserializerDefaultsTest {
@@ -55,14 +57,20 @@ public class FastDeserializerDefaultsTest {
         Schema.Parser parser = new Schema.Parser();
         Schema oldRecordSchema = parser.parse(this.getClass().getResourceAsStream("/schema/defaultsTestOld.avsc"));
         GenericData.Record oldRecord = new GenericData.Record(oldRecordSchema);
-        oldRecord.put("oldInt", 1);
+        GenericData.Record oldSubRecord = new GenericData.Record(oldRecordSchema.getField("oldSubRecord").schema());
+        oldSubRecord.put("oldSubField", "testValueOfSubField");
+        oldSubRecord.put("fieldToBeRemoved", 33);
+        oldRecord.put("oldSubRecord", oldSubRecord);
 
         // when
         DefaultsTestRecord testRecord = decodeSpecificFast(DefaultsTestRecord.getClassSchema(), oldRecordSchema,
                 genericDataAsDecoder(oldRecord));
 
         // then
-        Assert.assertEquals(1, (int) testRecord.getOldInt());
+        Assert.assertEquals(oldSubRecord.get("oldSubField"),
+                ((OldSubRecord) testRecord.get("oldSubRecord")).get("oldSubField"));
+        Assert.assertEquals("defaultOldSubField",
+                ((OldSubRecord) testRecord.get("newFieldWithOldSubRecord")).get("oldSubField"));
         Assert.assertEquals(42, (int) testRecord.getTestInt());
         Assert.assertNull(testRecord.getTestIntUnion());
         Assert.assertEquals(9223372036854775807L, (long) testRecord.getTestLong());
@@ -76,6 +84,7 @@ public class FastDeserializerDefaultsTest {
         Assert.assertEquals(ByteBuffer.wrap(new byte[] { 0, 1, 2, 3 }), testRecord.getTestBytes());
         Assert.assertNull(testRecord.getTestBytesUnion());
         Assert.assertEquals("testStringValue", testRecord.getTestString());
+        Assert.assertEquals(new URL("http://www.example.com"), testRecord.getTestStringable());
         Assert.assertNull(testRecord.getTestStringUnion());
         Assert.assertEquals(new DefaultsFixed(new byte[] { (byte) 0xFF }), testRecord.getTestFixed());
         Assert.assertNull(testRecord.getTestFixedUnion());
@@ -97,6 +106,10 @@ public class FastDeserializerDefaultsTest {
         Assert.assertEquals(Collections.singletonList(DefaultsSubRecord.newBuilder().setSubField("recordArrayValue")
                 .setArrayField(Collections.singletonList(DefaultsEnum.A)).build()), testRecord.getRecordArray());
         Assert.assertEquals(listWithNull, testRecord.getRecordUnionArray());
+
+        Map stringableMap = new HashMap();
+        stringableMap.put(new URL("http://www.example2.com"), new BigInteger("123"));
+        Assert.assertEquals(stringableMap, testRecord.getStringableMap());
 
         Map recordMap = new HashMap();
         recordMap.put("test", DefaultsSubRecord.newBuilder().setSubField("recordMapValue")
@@ -120,14 +133,20 @@ public class FastDeserializerDefaultsTest {
         Schema.Parser parser = new Schema.Parser();
         Schema oldRecordSchema = parser.parse(this.getClass().getResourceAsStream("/schema/defaultsTestOld.avsc"));
         GenericData.Record oldRecord = new GenericData.Record(oldRecordSchema);
-        oldRecord.put("oldInt", 1);
+        GenericData.Record oldSubRecord = new GenericData.Record(oldRecordSchema.getField("oldSubRecord").schema());
+        oldSubRecord.put("oldSubField", "testValueOfSubField");
+        oldSubRecord.put("fieldToBeRemoved", 33);
+        oldRecord.put("oldSubRecord", oldSubRecord);
 
         // when
         GenericRecord testRecord = decodeGenericFast(DefaultsTestRecord.getClassSchema(), oldRecordSchema,
                 genericDataAsDecoder(oldRecord));
 
         // then
-        Assert.assertEquals(1, (int) testRecord.get("oldInt"));
+        Assert.assertEquals(oldSubRecord.get("oldSubField"),
+                ((GenericData.Record) testRecord.get("oldSubRecord")).get("oldSubField"));
+        Assert.assertEquals("defaultOldSubField",
+                ((GenericData.Record) testRecord.get("newFieldWithOldSubRecord")).get("oldSubField"));
         Assert.assertEquals(42, (int) testRecord.get("testInt"));
         Assert.assertNull(testRecord.get("testIntUnion"));
         Assert.assertEquals(9223372036854775807L, (long) testRecord.get("testLong"));
@@ -141,6 +160,7 @@ public class FastDeserializerDefaultsTest {
         Assert.assertEquals(ByteBuffer.wrap(new byte[] { 0, 1, 2, 3 }), testRecord.get("testBytes"));
         Assert.assertNull(testRecord.get("testBytesUnion"));
         Assert.assertEquals("testStringValue", testRecord.get("testString"));
+        Assert.assertEquals("http://www.example.com", testRecord.get("testStringable"));
         Assert.assertNull(testRecord.get("testStringUnion"));
         Assert.assertEquals(new GenericData.Fixed(DefaultsFixed.getClassSchema(), new byte[] { (byte) 0xFF }),
                 testRecord.get("testFixed"));
@@ -168,6 +188,10 @@ public class FastDeserializerDefaultsTest {
                 testRecord.get("recordArray"));
         Assert.assertEquals(listWithNull, testRecord.get("recordUnionArray"));
 
+        Map stringableMap = new HashMap();
+        stringableMap.put("http://www.example2.com", "123");
+        Assert.assertEquals(stringableMap, testRecord.get("stringableMap"));
+
         Map recordMap = new HashMap();
         recordMap.put("test", newGenericSubRecord("recordMapValue", null, "A"));
         Assert.assertEquals(recordMap, testRecord.get("recordMap"));
@@ -188,7 +212,10 @@ public class FastDeserializerDefaultsTest {
         Schema.Parser parser = new Schema.Parser();
         Schema oldRecordSchema = parser.parse(this.getClass().getResourceAsStream("/schema/defaultsTestOld.avsc"));
         GenericData.Record oldRecord = new GenericData.Record(oldRecordSchema);
-        oldRecord.put("oldInt", 1);
+        GenericData.Record oldSubRecord = new GenericData.Record(oldRecordSchema.getField("oldSubRecord").schema());
+        oldSubRecord.put("oldSubField", "testValueOfSubField");
+        oldSubRecord.put("fieldToBeRemoved", 33);
+        oldRecord.put("oldSubRecord", oldSubRecord);
 
         // when
         DefaultsTestRecord testRecordSlow = decodeSpecificSlow(DefaultsTestRecord.getClassSchema(),
@@ -206,7 +233,10 @@ public class FastDeserializerDefaultsTest {
         Schema.Parser parser = new Schema.Parser();
         Schema oldRecordSchema = parser.parse(this.getClass().getResourceAsStream("/schema/defaultsTestOld.avsc"));
         GenericData.Record oldRecord = new GenericData.Record(oldRecordSchema);
-        oldRecord.put("oldInt", 1);
+        GenericData.Record oldSubRecord = new GenericData.Record(oldRecordSchema.getField("oldSubRecord").schema());
+        oldSubRecord.put("oldSubField", "testValueOfSubField");
+        oldSubRecord.put("fieldToBeRemoved", 33);
+        oldRecord.put("oldSubRecord", oldSubRecord);
 
         // when
         GenericRecord testRecordSlow = decodeGenericSlow(DefaultsTestRecord.getClassSchema(),

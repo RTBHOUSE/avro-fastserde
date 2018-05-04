@@ -1,0 +1,39 @@
+{
+  "type": "record",
+  "name": "StringableRecord",
+  "namespace": "com.rtbhouse.utils.generated.avro",
+  "doc": null,
+  "fields": [
+    { "name": "biginteger",
+      "type": { "type": "string", "java-class": "java.math.BigInteger" }
+    },
+    { "name": "bigdecimal",
+      "type": {"type": "string", "java-class": "java.math.BigDecimal" }
+    },
+    { "name": "uri",
+      "type": "string",
+      "type": {"type": "string", "java-class": "java.net.URI" }
+    },
+    { "name": "url",
+      "type": "string",
+      "type": {"type": "string", "java-class": "java.net.URL" }
+    },
+    { "name": "file",
+      "type": "string",
+      "type": {"type": "string", "java-class": "java.io.File" }
+    },
+    { "name": "urlArray",
+      "type": {
+        "type": "array",
+        "items": { "type": "string", "java-class": "java.net.URL" }
+        }
+    },
+    { "name": "urlMap",
+      "type": {
+        "type": "map",
+        "java-key-class": "java.net.URL",
+        "values": { "type": "string", "java-class": "java.math.BigInteger" }
+      }
+    }
+   ]
+}
