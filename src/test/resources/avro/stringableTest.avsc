@@ -34,6 +34,17 @@
         "java-key-class": "java.net.URL",
         "values": { "type": "string", "java-class": "java.math.BigInteger" }
       }
+    },
+    { "name": "subRecord",
+      "type":
+      { "type": "record",
+        "name":  "StringableSubRecord",
+        "fields": [
+          { "type" : {"type": "string", "java-class": "java.net.URL"},
+            "name": "field0"
+          }
+        ]
+      }
     }
-   ]
+  ]
 }

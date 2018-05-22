@@ -26,6 +26,7 @@ import static com.rtbhouse.utils.avro.FastSerdeTestsSupport.specificDataAsDecode
 import static com.rtbhouse.utils.avro.FastSerdeTestsSupport.specificDataFromDecoder;
 
 import com.rtbhouse.utils.generated.avro.StringableRecord;
+import com.rtbhouse.utils.generated.avro.StringableSubRecord;
 
 public class FastStringableTest {
 
@@ -52,6 +53,8 @@ public class FastStringableTest {
         File exampleFile = new File("/tmp/test");
         URI exampleURI = new URI("urn:ISSN:1522-3611");
         URL exampleURL = new URL("http://www.example.com");
+        StringableSubRecord subrecord = new StringableSubRecord();
+        subrecord.put(0, exampleURL);
 
         StringableRecord.Builder recordBuilder = StringableRecord.newBuilder();
         recordBuilder.setBigdecimal(exampleBigDecimal);
@@ -61,6 +64,7 @@ public class FastStringableTest {
         recordBuilder.setUrl(exampleURL);
         recordBuilder.setUrlArray(Collections.singletonList(exampleURL));
         recordBuilder.setUrlMap(Collections.singletonMap(exampleURL, exampleBigInteger));
+        recordBuilder.setSubRecord(subrecord);
         StringableRecord record = recordBuilder.build();
 
         //when
@@ -86,6 +90,8 @@ public class FastStringableTest {
         File exampleFile = new File("/tmp/test");
         URI exampleURI = new URI("urn:ISSN:1522-3611");
         URL exampleURL = new URL("http://www.example.com");
+        StringableSubRecord subrecord = new StringableSubRecord();
+        subrecord.put(0, exampleURL);
 
         StringableRecord.Builder recordBuilder = StringableRecord.newBuilder();
         recordBuilder.setBigdecimal(exampleBigDecimal);
@@ -95,6 +101,7 @@ public class FastStringableTest {
         recordBuilder.setUrl(exampleURL);
         recordBuilder.setUrlArray(Collections.singletonList(exampleURL));
         recordBuilder.setUrlMap(Collections.singletonMap(exampleURL, exampleBigInteger));
+        recordBuilder.setSubRecord(subrecord);
         StringableRecord record = recordBuilder.build();
 
         //when

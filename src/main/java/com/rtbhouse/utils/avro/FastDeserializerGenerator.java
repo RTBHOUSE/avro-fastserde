@@ -11,13 +11,30 @@ import java.util.Map;
 import java.util.Set;
 import java.util.stream.Collectors;
 
-import com.sun.codemodel.*;
-
 import org.apache.avro.Schema;
 import org.apache.avro.io.Decoder;
 import org.apache.avro.io.parsing.ResolvingGrammarGenerator;
 import org.apache.avro.io.parsing.Symbol;
 import org.codehaus.jackson.JsonNode;
+
+import com.sun.codemodel.JArray;
+import com.sun.codemodel.JBlock;
+import com.sun.codemodel.JCatchBlock;
+import com.sun.codemodel.JClass;
+import com.sun.codemodel.JClassAlreadyExistsException;
+import com.sun.codemodel.JConditional;
+import com.sun.codemodel.JDoLoop;
+import com.sun.codemodel.JExpr;
+import com.sun.codemodel.JExpression;
+import com.sun.codemodel.JFieldVar;
+import com.sun.codemodel.JForLoop;
+import com.sun.codemodel.JInvocation;
+import com.sun.codemodel.JMethod;
+import com.sun.codemodel.JMod;
+import com.sun.codemodel.JPackage;
+import com.sun.codemodel.JStatement;
+import com.sun.codemodel.JTryBlock;
+import com.sun.codemodel.JVar;
 
 public class FastDeserializerGenerator<T> extends FastDeserializerGeneratorBase<T> {
 
@@ -29,14 +46,14 @@ public class FastDeserializerGenerator<T> extends FastDeserializerGeneratorBase<
     private Map<Integer, Schema> schemaMap = new HashMap<>();
     private Map<String, JMethod> deserializeMethodMap = new HashMap<>();
     private Map<String, JMethod> skipMethodMap = new HashMap<>();
-    private SchemaMapper schemaMapper;
+    private SchemaAssistant schemaAssistant;
 
     FastDeserializerGenerator(boolean useGenericTypes, Schema writer, Schema reader, File destination,
             ClassLoader classLoader,
             String compileClassPath) {
         super(writer, reader, destination, classLoader, compileClassPath);
         this.useGenericTypes = useGenericTypes;
-        this.schemaMapper = new SchemaMapper(codeModel, useGenericTypes);
+        this.schemaAssistant = new SchemaAssistant(codeModel, useGenericTypes);
     }
 
     public FastDeserializer<T> generateDeserializer() {
@@ -65,27 +82,27 @@ public class FastDeserializerGenerator<T> extends FastDeserializerGeneratorBase<
                 registerSchema(aliasedWriterSchema, readerSchemaVar);
             }
 
-            JClass readerSchemaClass = schemaMapper.classFromSchema(reader);
-            JClass writerSchemaClass = schemaMapper.classFromSchema(aliasedWriterSchema);
+            JClass readerSchemaClass = schemaAssistant.classFromSchema(reader);
+            JClass writerSchemaClass = schemaAssistant.classFromSchema(aliasedWriterSchema);
 
             deserializerClass._implements(codeModel.ref(FastDeserializer.class).narrow(writerSchemaClass));
             JMethod deserializeMethod = deserializerClass.method(JMod.PUBLIC, readerSchemaClass, "deserialize");
 
             JVar result = declareValueVar("result", aliasedWriterSchema, deserializeMethod.body());
 
-            JTryBlock tryDeserializeBlock = deserializeMethod.body()._try();
+            JBlock topLevelDeserializeBlock = new JBlock();
 
             switch (aliasedWriterSchema.getType()) {
             case RECORD:
-                processRecord(readerSchemaVar, result, aliasedWriterSchema, reader, tryDeserializeBlock.body(),
+                processRecord(readerSchemaVar, result, aliasedWriterSchema, reader, topLevelDeserializeBlock,
                         fieldAction);
                 break;
             case ARRAY:
-                processArray(readerSchemaVar, result, null, aliasedWriterSchema, reader, tryDeserializeBlock.body(),
+                processArray(readerSchemaVar, result, null, aliasedWriterSchema, reader, topLevelDeserializeBlock,
                         fieldAction);
                 break;
             case MAP:
-                processMap(readerSchemaVar, result, null, aliasedWriterSchema, reader, tryDeserializeBlock.body(),
+                processMap(readerSchemaVar, result, null, aliasedWriterSchema, reader, topLevelDeserializeBlock,
                         fieldAction);
                 break;
             default:
@@ -93,9 +110,17 @@ public class FastDeserializerGenerator<T> extends FastDeserializerGeneratorBase<
                         "Incorrect top-level writer schema: " + aliasedWriterSchema.getType());
             }
 
-            JCatchBlock catchBlock = tryDeserializeBlock._catch(codeModel.ref(Throwable.class));
-            JVar exceptionVar = catchBlock.param("e");
-            catchBlock.body()._throw(JExpr._new(codeModel.ref(IOException.class)).arg(exceptionVar));
+            if (schemaAssistant.getExceptionsFromStringable().isEmpty()) {
+                deserializeMethod.body().add(topLevelDeserializeBlock);
+            } else {
+                JTryBlock tryBlock = deserializeMethod.body()._try();
+                tryBlock.body().add(topLevelDeserializeBlock);
+                for (Class<? extends Exception> classException : schemaAssistant.getExceptionsFromStringable()) {
+                    JCatchBlock catchBlock = tryBlock._catch(codeModel.ref(classException));
+                    JVar exceptionVar = catchBlock.param("e");
+                    catchBlock.body()._throw(JExpr._new(codeModel.ref(IOException.class)).arg(exceptionVar));
+                }
+            }
 
             deserializeMethod._throws(codeModel.ref(IOException.class));
             deserializeMethod.param(Decoder.class, DECODER);
@@ -148,7 +173,9 @@ public class FastDeserializerGenerator<T> extends FastDeserializerGeneratorBase<
         }
 
         JMethod method = createMethod(recordWriterSchema, recordAction.getShouldRead());
-        method._throws(Throwable.class);
+
+        Set<Class<? extends Exception>> exceptionsOnHigherLevel = schemaAssistant.getExceptionsFromStringable();
+        schemaAssistant.resetExceptionsFromStringable();
 
         if (recordVar != null) {
             body.assign(recordVar, JExpr.invoke(method).arg(JExpr.direct(DECODER)));
@@ -160,8 +187,8 @@ public class FastDeserializerGenerator<T> extends FastDeserializerGeneratorBase<
 
         JVar result = null;
         if (recordAction.getShouldRead()) {
-            JClass recordClass = schemaMapper.classFromSchema(recordWriterSchema);
-            JInvocation newRecord = JExpr._new(schemaMapper.classFromSchema(recordWriterSchema, false));
+            JClass recordClass = schemaAssistant.classFromSchema(recordWriterSchema);
+            JInvocation newRecord = JExpr._new(schemaAssistant.classFromSchema(recordWriterSchema, false));
             if (useGenericTypes) {
                 newRecord = newRecord.arg(schemaMapField.invoke("get").arg(JExpr.lit(getSchemaId(recordWriterSchema))));
             }
@@ -183,11 +210,11 @@ public class FastDeserializerGenerator<T> extends FastDeserializerGeneratorBase<
             }
 
             JExpression fieldValueExpression;
-            if (SchemaMapper.isComplexType(field.schema())) {
+            if (SchemaAssistant.isComplexType(field.schema())) {
                 JVar fieldValueVar = null;
                 JVar fieldSchemaVar = null;
                 if (action.getShouldRead()) {
-                    fieldValueVar = body.decl(schemaMapper.classFromSchema(field.schema()),
+                    fieldValueVar = body.decl(schemaAssistant.classFromSchema(field.schema()),
                             getVariableName(field.name()), JExpr._null());
                     if (useGenericTypes)
                         fieldSchemaVar = declareSchemaVar(field.schema(), field.name(),
@@ -257,6 +284,13 @@ public class FastDeserializerGenerator<T> extends FastDeserializerGeneratorBase<
         if (recordAction.getShouldRead()) {
             body._return(result);
         }
+
+        for (Class<? extends Exception> exceptionClass : schemaAssistant.getExceptionsFromStringable()) {
+            method._throws(exceptionClass);
+            exceptionsOnHigherLevel.add(exceptionClass);
+        }
+        schemaAssistant.setExceptionsFromStringable(exceptionsOnHigherLevel);
+
     }
 
     private JExpression parseDefaultValue(Schema schema, JsonNode defaultValue, JBlock body, JVar schemaVar,
@@ -276,8 +310,8 @@ public class FastDeserializerGenerator<T> extends FastDeserializerGeneratorBase<
             return JExpr._null();
         }
 
-        if (SchemaMapper.isComplexType(schema)) {
-            JClass defaultValueClass = schemaMapper.classFromSchema(schema, false);
+        if (SchemaAssistant.isComplexType(schema)) {
+            JClass defaultValueClass = schemaAssistant.classFromSchema(schema, false);
             JInvocation valueInitializationExpr = JExpr._new(defaultValueClass);
 
             JVar valueVar;
@@ -331,8 +365,8 @@ public class FastDeserializerGenerator<T> extends FastDeserializerGeneratorBase<
                 for (Iterator<Map.Entry<String, JsonNode>> it = defaultValue.getFields(); it.hasNext();) {
                     Map.Entry<String, JsonNode> mapEntry = it.next();
                     JExpression mapKeyExpr;
-                    if (SchemaMapper.haveStringableKey(schema)) {
-                        mapKeyExpr = JExpr._new(schemaMapper.keyClassFromMapSchema(schema)).arg(mapEntry.getKey());
+                    if (SchemaAssistant.hasStringableKey(schema)) {
+                        mapKeyExpr = JExpr._new(schemaAssistant.keyClassFromMapSchema(schema)).arg(mapEntry.getKey());
                     } else {
                         mapKeyExpr = JExpr.lit(mapEntry.getKey());
                     }
@@ -349,14 +383,14 @@ public class FastDeserializerGenerator<T> extends FastDeserializerGeneratorBase<
         } else {
             switch (schemaType) {
             case ENUM:
-                return schemaMapper.getEnumValueByName(schema, JExpr.lit(defaultValue.getTextValue()),
+                return schemaAssistant.getEnumValueByName(schema, JExpr.lit(defaultValue.getTextValue()),
                         getSchemaExpr(schema));
             case FIXED:
                 JArray fixedBytesArray = JExpr.newArray(codeModel.BYTE);
                 for (char b : defaultValue.getTextValue().toCharArray()) {
                     fixedBytesArray.add(JExpr.lit((byte) b));
                 }
-                return schemaMapper.getFixedValue(schema, fixedBytesArray, getSchemaExpr(schema));
+                return schemaAssistant.getFixedValue(schema, fixedBytesArray, getSchemaExpr(schema));
             case BYTES:
                 JArray bytesArray = JExpr.newArray(codeModel.BYTE);
                 for (byte b : defaultValue.getTextValue().getBytes()) {
@@ -364,7 +398,7 @@ public class FastDeserializerGenerator<T> extends FastDeserializerGeneratorBase<
                 }
                 return codeModel.ref(ByteBuffer.class).staticInvoke("wrap").arg(bytesArray);
             case STRING:
-                return schemaMapper.getStringableValue(schema, JExpr.lit(defaultValue.getTextValue()));
+                return schemaAssistant.getStringableValue(schema, JExpr.lit(defaultValue.getTextValue()));
             case INT:
                 return JExpr.lit(defaultValue.getIntValue());
             case LONG:
@@ -386,7 +420,7 @@ public class FastDeserializerGenerator<T> extends FastDeserializerGeneratorBase<
             final Schema unionSchema, final Schema readerUnionSchema, JBlock body, FieldAction action) {
         JVar unionIndex = body.decl(codeModel.INT, getVariableName("unionIndex"),
                 JExpr.direct(DECODER + ".readIndex()"));
-        JClass unionClass = schemaMapper.classFromSchema(unionSchema);
+        JClass unionClass = schemaAssistant.classFromSchema(unionSchema);
 
         JConditional ifBlock = null;
 
@@ -418,7 +452,8 @@ public class FastDeserializerGenerator<T> extends FastDeserializerGeneratorBase<
                     throw new FastDeserializerGeneratorException("Unable to determine action for field: " + name);
                 }
 
-                Symbol.UnionAdjustAction unionAdjustAction = (Symbol.UnionAdjustAction) alternative.symbols[i].production[0];
+                Symbol.UnionAdjustAction unionAdjustAction =
+                        (Symbol.UnionAdjustAction) alternative.symbols[i].production[0];
                 unionAction = FieldAction.fromValues(optionSchema.getType(), action.getShouldRead(),
                         unionAdjustAction.symToParse);
             } else {
@@ -436,7 +471,7 @@ public class FastDeserializerGenerator<T> extends FastDeserializerGeneratorBase<
             }
 
             JExpression optionValue;
-            if (SchemaMapper.isComplexType(optionSchema)) {
+            if (SchemaAssistant.isComplexType(optionSchema)) {
 
                 JVar optionValueVar = null;
 
@@ -511,7 +546,7 @@ public class FastDeserializerGenerator<T> extends FastDeserializerGeneratorBase<
         JConditional conditional = body._if(chunkLen.gt(JExpr.lit(0)));
         JBlock ifBlock = conditional._then();
 
-        JClass arrayClass = schemaMapper.classFromSchema(arraySchema, false);
+        JClass arrayClass = schemaAssistant.classFromSchema(arraySchema, false);
 
         if (action.getShouldRead()) {
             JInvocation newArrayExp = JExpr._new(arrayClass);
@@ -542,7 +577,7 @@ public class FastDeserializerGenerator<T> extends FastDeserializerGeneratorBase<
                     arraySchemaVar.invoke("getElementType"));
         }
 
-        if (SchemaMapper.isComplexType(arraySchema.getElementType())) {
+        if (SchemaAssistant.isComplexType(arraySchema.getElementType())) {
             JVar elementValueVar = null;
             if (action.getShouldRead()) {
                 elementValueVar = declareValueVar(name, arraySchema.getElementType(), forBody);
@@ -567,6 +602,8 @@ public class FastDeserializerGenerator<T> extends FastDeserializerGeneratorBase<
                 processUnion(elementSchemaVar, elementValueVar, elemName, arraySchema.getElementType(),
                         readerArrayElementSchema, forBody, action);
                 break;
+            default:
+                throw new FastDeserializerGeneratorException("Unexpected complex type: " + action.getType());
             }
             elementValueExpression = elementValueVar;
         } else {
@@ -620,7 +657,7 @@ public class FastDeserializerGenerator<T> extends FastDeserializerGeneratorBase<
         JBlock ifBlock = conditional._then();
 
         if (action.getShouldRead()) {
-            ifBlock.assign(mapVar, JExpr._new(schemaMapper.classFromSchema(mapSchema, false)));
+            ifBlock.assign(mapVar, JExpr._new(schemaAssistant.classFromSchema(mapSchema, false)));
             JBlock elseBlock = conditional._else();
             elseBlock.assign(mapVar, codeModel.ref(Collections.class).staticInvoke("emptyMap"));
         }
@@ -632,9 +669,9 @@ public class FastDeserializerGenerator<T> extends FastDeserializerGeneratorBase<
         forLoop.update(counter.incr());
         JBlock forBody = forLoop.body();
 
-        JClass keyClass = schemaMapper.keyClassFromMapSchema(mapSchema);
+        JClass keyClass = schemaAssistant.keyClassFromMapSchema(mapSchema);
         JExpression keyValueExpression = JExpr.direct(DECODER + ".readString()");
-        if (SchemaMapper.haveStringableKey(mapSchema)) {
+        if (SchemaAssistant.hasStringableKey(mapSchema)) {
             keyValueExpression = JExpr._new(keyClass).arg(keyValueExpression);
         }
 
@@ -645,7 +682,7 @@ public class FastDeserializerGenerator<T> extends FastDeserializerGeneratorBase<
             mapValueSchemaVar = declareSchemaVar(mapSchema.getValueType(), getVariableName(name + "MapValue"),
                     mapSchemaVar.invoke("getValueType"));
 
-        if (SchemaMapper.isComplexType(mapSchema.getValueType())) {
+        if (SchemaAssistant.isComplexType(mapSchema.getValueType())) {
             JVar mapValueVar = null;
             Schema readerMapValueSchema = readerMapSchema.getValueType();
 
@@ -703,7 +740,7 @@ public class FastDeserializerGenerator<T> extends FastDeserializerGeneratorBase<
 
             body.directStatement(DECODER + ".readFixed(" + fixedBuffer.name() + ");");
 
-            JInvocation createFixed = JExpr._new(schemaMapper.classFromSchema(schema));
+            JInvocation createFixed = JExpr._new(schemaAssistant.classFromSchema(schema));
             if (useGenericTypes)
                 createFixed = createFixed.arg(getSchemaExpr(schema));
 
@@ -744,13 +781,14 @@ public class FastDeserializerGenerator<T> extends FastDeserializerGeneratorBase<
             JExpression enumValueExpr = JExpr.direct(DECODER + ".readEnum()");
 
             if (enumOrderCorrect) {
-                newEnum = schemaMapper.getEnumValueByIndex(schema, enumValueExpr, getSchemaExpr(schema));
+                newEnum = schemaAssistant.getEnumValueByIndex(schema, enumValueExpr, getSchemaExpr(schema));
             } else {
                 JVar enumIndex = body.decl(codeModel.INT, getVariableName("enumIndex"), enumValueExpr);
-                newEnum = body.decl(schemaMapper.classFromSchema(schema), getVariableName("enumValue"), JExpr._null());
+                JClass enumClass = schemaAssistant.classFromSchema(schema);
+                newEnum = body.decl(enumClass, getVariableName("enumValue"), JExpr._null());
 
                 for (int i = 0; i < enumAdjustAction.adjustments.length; i++) {
-                    JExpression ithVal = schemaMapper
+                    JExpression ithVal = schemaAssistant
                             .getEnumValueByIndex(schema, JExpr.lit((Integer) enumAdjustAction.adjustments[i]),
                                     getSchemaExpr(schema));
                     body._if(enumIndex.eq(JExpr.lit(i)))._then().assign((JVar) newEnum, ithVal);
@@ -797,21 +835,21 @@ public class FastDeserializerGenerator<T> extends FastDeserializerGeneratorBase<
 
         JExpression primitiveValueExpression = JExpr.direct("decoder." + readFunction);
         if (action.getShouldRead()) {
-            if (schema.getType().equals(Schema.Type.STRING) && SchemaMapper.isStringable(schema)) {
-                primitiveValueExpression = JExpr._new(schemaMapper.classFromSchema(schema))
+            if (schema.getType().equals(Schema.Type.STRING) && SchemaAssistant.isStringable(schema)) {
+                primitiveValueExpression = JExpr._new(schemaAssistant.classFromSchema(schema))
                         .arg(primitiveValueExpression);
             }
 
             return primitiveValueExpression;
         } else {
             body.directStatement(DECODER + "." + readFunction + ";");
-            return JExpr._null();
+            return null;
         }
     }
 
     private JVar declareValueVar(final String name, final Schema schema, JBlock block) {
-        if (SchemaMapper.isComplexType(schema)) {
-            return block.decl(schemaMapper.classFromSchema(schema), getVariableName(name), JExpr._null());
+        if (SchemaAssistant.isComplexType(schema)) {
+            return block.decl(schemaAssistant.classFromSchema(schema), getVariableName(name), JExpr._null());
         } else {
             throw new FastDeserializerGeneratorException("Only complex types allowed!");
         }
@@ -821,7 +859,7 @@ public class FastDeserializerGenerator<T> extends FastDeserializerGeneratorBase<
         if (!useGenericTypes) {
             return null;
         }
-        if (SchemaMapper.isComplexType(valueSchema) || SchemaMapper.isNamedType(valueSchema)) {
+        if (SchemaAssistant.isComplexType(valueSchema) || SchemaAssistant.isNamedType(valueSchema)) {
             JVar schemaVar = schemaMapMethod.body().decl(codeModel.ref(Schema.class), getVariableName(variableName),
                     getValueType);
             registerSchema(valueSchema, schemaVar);
@@ -841,8 +879,7 @@ public class FastDeserializerGenerator<T> extends FastDeserializerGeneratorBase<
                     "Methods are defined only for records, not for " + schema.getType());
         }
 
-        return read ? deserializeMethodMap.containsKey(schema.getFullName())
-                : skipMethodMap.containsKey(schema.getFullName());
+        return (read ? deserializeMethodMap : skipMethodMap).containsKey(schema.getFullName());
     }
 
     private JMethod getMethod(final Schema schema, boolean read) {
@@ -850,10 +887,10 @@ public class FastDeserializerGenerator<T> extends FastDeserializerGeneratorBase<
             throw new FastDeserializerGeneratorException(
                     "Methods are defined only for records, not for " + schema.getType());
         }
-        if (methodAlreadyDefined(schema, read)) {
-            return read ? deserializeMethodMap.get(schema.getFullName()) : skipMethodMap.get(schema.getFullName());
+        if (!methodAlreadyDefined(schema, read)) {
+            throw new FastDeserializerGeneratorException("No method for schema: " + schema.getFullName());
         }
-        throw new FastDeserializerGeneratorException("No method for schema: " + schema.getFullName());
+        return (read ? deserializeMethodMap : skipMethodMap).get(schema.getFullName());
     }
 
     private JMethod createMethod(final Schema schema, boolean read) {
@@ -865,19 +902,14 @@ public class FastDeserializerGenerator<T> extends FastDeserializerGeneratorBase<
             throw new FastDeserializerGeneratorException("Method already exists for: " + schema.getFullName());
         }
 
-        JMethod method = deserializerClass.method(JMod.PUBLIC, read
-                ? schemaMapper.classFromSchema(schema)
-                : codeModel.VOID,
-                "deserialize" + schema.getName() + nextRandomInt());
+        JMethod method = deserializerClass.method(JMod.PUBLIC,
+                read ? schemaAssistant.classFromSchema(schema) : codeModel.VOID,
+                getVariableName("deserialize" + schema.getName()));
 
         method._throws(IOException.class);
         method.param(Decoder.class, DECODER);
 
-        if (read) {
-            deserializeMethodMap.put(schema.getFullName(), method);
-        } else {
-            skipMethodMap.put(schema.getFullName(), method);
-        }
+        (read ? deserializeMethodMap : skipMethodMap).put(schema.getFullName(), method);
 
         return method;
     }
@@ -897,10 +929,6 @@ public class FastDeserializerGenerator<T> extends FastDeserializerGeneratorBase<
     }
 
     private JInvocation getSchemaExpr(Schema schema) {
-        if (useGenericTypes) {
-            return schemaMapField.invoke("get").arg(JExpr.lit(getSchemaId(schema)));
-        } else {
-            return null;
-        }
+        return useGenericTypes ? schemaMapField.invoke("get").arg(JExpr.lit(getSchemaId(schema))) : null;
     }
 }

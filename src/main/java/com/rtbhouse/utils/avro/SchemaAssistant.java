@@ -1,36 +1,70 @@
 package com.rtbhouse.utils.avro;
 
+import java.math.BigDecimal;
+import java.math.BigInteger;
+import java.net.MalformedURLException;
+import java.net.URI;
+import java.net.URISyntaxException;
+import java.net.URL;
+import java.nio.ByteBuffer;
+import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.HashSet;
+import java.util.List;
+import java.util.Map;
+import java.util.Set;
+
+import org.apache.avro.Schema;
+import org.apache.avro.generic.GenericData;
+import org.apache.avro.specific.SpecificData;
+
 import com.sun.codemodel.JClass;
 import com.sun.codemodel.JCodeModel;
 import com.sun.codemodel.JExpr;
 import com.sun.codemodel.JExpression;
 import com.sun.codemodel.JInvocation;
 
-import org.apache.avro.Schema;
-import org.apache.avro.generic.GenericData;
-
-import java.nio.ByteBuffer;
-import java.util.ArrayList;
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
-
-class SchemaMapper {
+public class SchemaAssistant {
     private final JCodeModel codeModel;
     private final boolean useGenericTypes;
+    private Set<Class<? extends Exception>> exceptionsFromStringable;
 
-    SchemaMapper(JCodeModel codeModel, boolean useGenericTypes) {
+    public SchemaAssistant(JCodeModel codeModel, boolean useGenericTypes) {
         this.codeModel = codeModel;
         this.useGenericTypes = useGenericTypes;
+        this.exceptionsFromStringable = new HashSet<>();
     }
 
-    JClass keyClassFromMapSchema(Schema schema) {
-        if (!Schema.Type.MAP.equals(schema.getType())) {
-            throw new SchemaMapperException("Map schema was expected, instead got:"
-                    + schema.getType().getName());
+    public void resetExceptionsFromStringable() {
+        exceptionsFromStringable = new HashSet<>();
+    }
+
+    public Set<Class<? extends Exception>> getExceptionsFromStringable() {
+        return exceptionsFromStringable;
+    }
+
+    public void setExceptionsFromStringable(Set<Class<? extends Exception>> exceptionsFromStringable) {
+        this.exceptionsFromStringable = exceptionsFromStringable;
+    }
+
+    private void extendExceptionsFromStringable(String className) {
+        if (URL.class.getName().equals(className)) {
+            exceptionsFromStringable.add(MalformedURLException.class);
+        } else if (URI.class.getName().equals(className)) {
+            exceptionsFromStringable.add(URISyntaxException.class);
+        } else if (BigInteger.class.getName().equals(className)
+                || BigDecimal.class.getName().equals(className)) {
+            exceptionsFromStringable.add(NumberFormatException.class);
         }
-        if (haveStringableKey(schema) && !useGenericTypes) {
-            return codeModel.ref(schema.getProp("java-key-class"));
+    }
+
+    public JClass keyClassFromMapSchema(Schema schema) {
+        if (!Schema.Type.MAP.equals(schema.getType())) {
+            throw new SchemaAssistantException("Map schema was expected, instead got:" + schema.getType().getName());
+        }
+        if (hasStringableKey(schema) && !useGenericTypes) {
+            extendExceptionsFromStringable(schema.getProp(SpecificData.KEY_CLASS_PROP));
+            return codeModel.ref(schema.getProp(SpecificData.KEY_CLASS_PROP));
         } else {
             return codeModel.ref(String.class);
         }
@@ -38,8 +72,7 @@ class SchemaMapper {
 
     private JClass valueClassFromMapSchema(Schema schema) {
         if (!Schema.Type.MAP.equals(schema.getType())) {
-            throw new SchemaMapperException("Map schema was expected, instead got:"
-                    + schema.getType().getName());
+            throw new SchemaAssistantException("Map schema was expected, instead got:" + schema.getType().getName());
         }
 
         return classFromSchema(schema.getValueType());
@@ -47,8 +80,7 @@ class SchemaMapper {
 
     private JClass elementClassFromArraySchema(Schema schema) {
         if (!Schema.Type.ARRAY.equals(schema.getType())) {
-            throw new SchemaMapperException("Array schema was expected, instead got:"
-                    + schema.getType().getName());
+            throw new SchemaAssistantException("Array schema was expected, instead got:" + schema.getType().getName());
         }
 
         return classFromSchema(schema.getElementType());
@@ -56,8 +88,7 @@ class SchemaMapper {
 
     private JClass classFromUnionSchema(final Schema schema) {
         if (!Schema.Type.UNION.equals(schema.getType())) {
-            throw new SchemaMapperException("Union schema was expected, instead got:"
-                    + schema.getType().getName());
+            throw new SchemaAssistantException("Union schema was expected, instead got:" + schema.getType().getName());
         }
 
         if (schema.getTypes().size() == 1) {
@@ -75,16 +106,16 @@ class SchemaMapper {
         return codeModel.ref(Object.class);
     }
 
-    JClass classFromSchema(Schema schema) {
+    public JClass classFromSchema(Schema schema) {
         return classFromSchema(schema, true, false);
     }
 
-    JClass classFromSchema(Schema schema, boolean abstractType) {
+    public JClass classFromSchema(Schema schema, boolean abstractType) {
         return classFromSchema(schema, abstractType, false);
     }
 
-    /* Note that settings abstractType and rawType are not passed subcalls */
-    JClass classFromSchema(Schema schema, boolean abstractType, boolean rawType) {
+    /* Note that settings abstractType and rawType are not passed to subcalls */
+    public JClass classFromSchema(Schema schema, boolean abstractType, boolean rawType) {
         JClass outputClass;
 
         switch (schema.getType()) {
@@ -146,7 +177,8 @@ class SchemaMapper {
             break;
         case STRING:
             if (isStringable(schema) && !useGenericTypes) {
-                outputClass = codeModel.ref(schema.getProp("java-class"));
+                outputClass = codeModel.ref(schema.getProp(SpecificData.CLASS_PROP));
+                extendExceptionsFromStringable(schema.getProp(SpecificData.CLASS_PROP));
             } else {
                 outputClass = codeModel.ref(String.class);
             }
@@ -155,7 +187,7 @@ class SchemaMapper {
             outputClass = codeModel.ref(ByteBuffer.class);
             break;
         default:
-            throw new SchemaMapperException("Incorrect request for class for " + schema.getType().getName() + " type!");
+            throw new SchemaAssistantException("Incorrect request for " + schema.getType().getName() + " class!");
         }
 
         return outputClass;
@@ -220,15 +252,16 @@ class SchemaMapper {
 
     public static boolean isStringable(Schema schema) {
         if (!Schema.Type.STRING.equals(schema.getType())) {
-            throw new SchemaMapperException("String schema expected!");
+            throw new SchemaAssistantException("String schema expected!");
         }
-        return schema.getProp("java-class") != null;
+        return schema.getProp(SpecificData.CLASS_PROP) != null;
     }
 
-    public static boolean haveStringableKey(Schema schema) {
+    public static boolean hasStringableKey(Schema schema) {
         if (!Schema.Type.MAP.equals(schema.getType())) {
-            throw new SchemaMapperException("String schema expected!");
+            throw new SchemaAssistantException("Map schema expected!");
         }
-        return schema.getProp("java-key-class") != null;
+        return schema.getProp(SpecificData.KEY_CLASS_PROP) != null;
     }
+
 }
