@@ -40,9 +40,18 @@
       { "type": "record",
         "name":  "StringableSubRecord",
         "fields": [
-          { "type" : {"type": "string", "java-class": "java.net.URL"},
-            "name": "field0"
+          { "type" : {"type": "string", "java-class": "java.net.URI"},
+            "name": "uriField"
           }
+        ]
+      }
+    },
+    { "name": "subRecordWithSubRecord",
+      "type":
+      { "type": "record",
+        "name":  "AnotherSubRecord",
+        "fields": [
+          { "type" : "StringableSubRecord", "name": "subRecord" }
         ]
       }
     }

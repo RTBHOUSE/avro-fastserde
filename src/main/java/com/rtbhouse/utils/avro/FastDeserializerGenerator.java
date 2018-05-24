@@ -11,6 +11,7 @@ import java.util.Map;
 import java.util.Set;
 import java.util.stream.Collectors;
 
+import org.apache.avro.AvroRuntimeException;
 import org.apache.avro.Schema;
 import org.apache.avro.io.Decoder;
 import org.apache.avro.io.parsing.ResolvingGrammarGenerator;
@@ -46,6 +47,7 @@ public class FastDeserializerGenerator<T> extends FastDeserializerGeneratorBase<
     private Map<Integer, Schema> schemaMap = new HashMap<>();
     private Map<String, JMethod> deserializeMethodMap = new HashMap<>();
     private Map<String, JMethod> skipMethodMap = new HashMap<>();
+    private Map<JMethod, Set<Class<? extends Exception>>> exceptionFromMethodMap = new HashMap<>();
     private SchemaAssistant schemaAssistant;
 
     FastDeserializerGenerator(boolean useGenericTypes, Schema writer, Schema reader, File destination,
@@ -118,7 +120,7 @@ public class FastDeserializerGenerator<T> extends FastDeserializerGeneratorBase<
                 for (Class<? extends Exception> classException : schemaAssistant.getExceptionsFromStringable()) {
                     JCatchBlock catchBlock = tryBlock._catch(codeModel.ref(classException));
                     JVar exceptionVar = catchBlock.param("e");
-                    catchBlock.body()._throw(JExpr._new(codeModel.ref(IOException.class)).arg(exceptionVar));
+                    catchBlock.body()._throw(JExpr._new(codeModel.ref(AvroRuntimeException.class)).arg(exceptionVar));
                 }
             }
 
@@ -142,8 +144,9 @@ public class FastDeserializerGenerator<T> extends FastDeserializerGeneratorBase<
         ListIterator<Symbol> actionIterator = actionIterator(recordAction);
 
         if (methodAlreadyDefined(recordWriterSchema, recordAction.getShouldRead())) {
-            JExpression readingExpression = JExpr.invoke(getMethod(recordWriterSchema, recordAction.getShouldRead()))
-                    .arg(JExpr.direct(DECODER));
+            JMethod method = getMethod(recordWriterSchema, recordAction.getShouldRead());
+            updateActualExceptions(method);
+            JExpression readingExpression = JExpr.invoke(method).arg(JExpr.direct(DECODER));
             if (recordVar != null) {
                 body.assign(recordVar, readingExpression);
             } else {
@@ -284,13 +287,17 @@ public class FastDeserializerGenerator<T> extends FastDeserializerGeneratorBase<
         if (recordAction.getShouldRead()) {
             body._return(result);
         }
-
-        for (Class<? extends Exception> exceptionClass : schemaAssistant.getExceptionsFromStringable()) {
-            method._throws(exceptionClass);
-            exceptionsOnHigherLevel.add(exceptionClass);
-        }
+        exceptionFromMethodMap.put(method, schemaAssistant.getExceptionsFromStringable());
         schemaAssistant.setExceptionsFromStringable(exceptionsOnHigherLevel);
+        updateActualExceptions(method);
+    }
 
+    private void updateActualExceptions(JMethod method) {
+        Set<Class<? extends Exception>> exceptionFromMethod = exceptionFromMethodMap.get(method);
+        for (Class<? extends Exception> exceptionClass : exceptionFromMethod) {
+            method._throws(exceptionClass);
+            schemaAssistant.getExceptionsFromStringable().add(exceptionClass);
+        }
     }
 
     private JExpression parseDefaultValue(Schema schema, JsonNode defaultValue, JBlock body, JVar schemaVar,
