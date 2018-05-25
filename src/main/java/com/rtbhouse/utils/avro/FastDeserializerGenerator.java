@@ -90,9 +90,8 @@ public class FastDeserializerGenerator<T> extends FastDeserializerGeneratorBase<
             deserializerClass._implements(codeModel.ref(FastDeserializer.class).narrow(writerSchemaClass));
             JMethod deserializeMethod = deserializerClass.method(JMod.PUBLIC, readerSchemaClass, "deserialize");
 
-            JVar result = declareValueVar("result", aliasedWriterSchema, deserializeMethod.body());
-
             JBlock topLevelDeserializeBlock = new JBlock();
+            JVar result = declareValueVar("result", aliasedWriterSchema, topLevelDeserializeBlock);
 
             switch (aliasedWriterSchema.getType()) {
             case RECORD:
@@ -113,10 +112,11 @@ public class FastDeserializerGenerator<T> extends FastDeserializerGeneratorBase<
             }
 
             if (schemaAssistant.getExceptionsFromStringable().isEmpty()) {
-                deserializeMethod.body().add(topLevelDeserializeBlock);
+                assignBlockToBody(deserializeMethod, topLevelDeserializeBlock);
             } else {
                 JTryBlock tryBlock = deserializeMethod.body()._try();
-                tryBlock.body().add(topLevelDeserializeBlock);
+                assignBlockToBody(tryBlock, topLevelDeserializeBlock);
+
                 for (Class<? extends Exception> classException : schemaAssistant.getExceptionsFromStringable()) {
                     JCatchBlock catchBlock = tryBlock._catch(codeModel.ref(classException));
                     JVar exceptionVar = catchBlock.param("e");
@@ -127,7 +127,7 @@ public class FastDeserializerGenerator<T> extends FastDeserializerGeneratorBase<
             deserializeMethod._throws(codeModel.ref(IOException.class));
             deserializeMethod.param(Decoder.class, DECODER);
 
-            deserializeMethod.body()._return(result);
+            topLevelDeserializeBlock._return(result);
 
             Class<FastDeserializer<T>> clazz = compileClass(className);
             return clazz.getConstructor(Schema.class).newInstance(reader);
