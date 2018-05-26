@@ -45,6 +45,7 @@ public class FastDeserializerGenerator<T> extends FastDeserializerGeneratorBase<
     private JMethod schemaMapMethod;
     private JFieldVar schemaMapField;
     private Map<Integer, Schema> schemaMap = new HashMap<>();
+    private Map<Integer, JVar> schemaVarMap = new HashMap<>();
     private Map<String, JMethod> deserializeMethodMap = new HashMap<>();
     private Map<String, JMethod> skipMethodMap = new HashMap<>();
     private Map<JMethod, Set<Class<? extends Exception>>> exceptionFromMethodMap = new HashMap<>();
@@ -207,21 +208,19 @@ public class FastDeserializerGenerator<T> extends FastDeserializerGeneratorBase<
 
             Schema.Field readerField = null;
             Schema readerFieldSchema = null;
+            JVar fieldSchemaVar = null;
             if (action.getShouldRead()) {
                 readerField = recordReaderSchema.getField(field.name());
                 readerFieldSchema = readerField.schema();
+                if (useGenericTypes)
+                    fieldSchemaVar = declareSchemaVar(field.schema(), field.name(), recordSchemaVar.invoke("getField").arg(field.name()).invoke("schema"));
             }
 
             JExpression fieldValueExpression;
             if (SchemaAssistant.isComplexType(field.schema())) {
                 JVar fieldValueVar = null;
-                JVar fieldSchemaVar = null;
                 if (action.getShouldRead()) {
-                    fieldValueVar = body.decl(schemaAssistant.classFromSchema(field.schema()),
-                            getVariableName(field.name()), JExpr._null());
-                    if (useGenericTypes)
-                        fieldSchemaVar = declareSchemaVar(field.schema(), field.name(),
-                                recordSchemaVar.invoke("getField").arg(field.name()).invoke("schema"));
+                    fieldValueVar = declareValueVar(field.name(), field.schema(), body);
                 }
                 switch (field.schema().getType()) {
                 case RECORD:
@@ -474,14 +473,13 @@ public class FastDeserializerGenerator<T> extends FastDeserializerGeneratorBase<
             JVar optionSchemaVar = null;
             if (useGenericTypes && unionAction.getShouldRead()) {
                 JInvocation optionSchemaExpression = unionSchemaVar.invoke("getTypes").invoke("get").arg(JExpr.lit(i));
-                optionSchemaVar = declareSchemaVar(optionSchema, name, optionSchemaExpression);
+                optionSchemaVar = declareSchemaVar(optionSchema, name + "OptionSchema", optionSchemaExpression);
             }
 
             JExpression optionValue;
             if (SchemaAssistant.isComplexType(optionSchema)) {
-
+                String optionName = name + "Option";
                 JVar optionValueVar = null;
-
                 if (unionAction.getShouldRead()) {
                     optionValueVar = declareValueVar(name, optionSchema, thenBlock);
                 }
@@ -491,12 +489,12 @@ public class FastDeserializerGenerator<T> extends FastDeserializerGeneratorBase<
                             unionAction);
                     break;
                 case ARRAY:
-                    processArray(optionSchemaVar, optionValueVar, name, optionSchema, readerOptionSchema, thenBlock,
-                            unionAction);
+                    processArray(optionSchemaVar, optionValueVar, optionName, optionSchema, readerOptionSchema,
+                            thenBlock, unionAction);
                     break;
                 case MAP:
-                    processMap(optionSchemaVar, optionValueVar, name, optionSchema, readerOptionSchema, thenBlock,
-                            unionAction);
+                    processMap(optionSchemaVar, optionValueVar, optionName, optionSchema, readerOptionSchema,
+                            thenBlock, unionAction);
                     break;
                 default:
                     throw new FastDeserializerGeneratorException("Unexpected complex type: " + action.getType());
@@ -576,22 +574,21 @@ public class FastDeserializerGenerator<T> extends FastDeserializerGeneratorBase<
         forLoop.update(counter.incr());
         JBlock forBody = forLoop.body();
 
-        Schema readerArrayElementSchema = null;
         JExpression elementValueExpression;
         JVar elementSchemaVar = null;
-        if (useGenericTypes) {
-            elementSchemaVar = declareSchemaVar(arraySchema.getElementType(), name + "ArraySchema",
+        if (action.getShouldRead() && useGenericTypes) {
+            elementSchemaVar = declareSchemaVar(arraySchema.getElementType(), name + "ArrayElemSchema",
                     arraySchemaVar.invoke("getElementType"));
         }
 
         if (SchemaAssistant.isComplexType(arraySchema.getElementType())) {
+            String elemName = name + "Elem";
             JVar elementValueVar = null;
+            Schema readerArrayElementSchema = null;
             if (action.getShouldRead()) {
-                elementValueVar = declareValueVar(name, arraySchema.getElementType(), forBody);
+                elementValueVar = declareValueVar(elemName, arraySchema.getElementType(), forBody);
                 readerArrayElementSchema = readerArraySchema.getElementType();
             }
-            String elemName = name + "Elem";
-
             switch (arraySchema.getElementType().getType()) {
             case RECORD:
                 processRecord(elementSchemaVar, elementValueVar, arraySchema.getElementType(), readerArrayElementSchema,
@@ -685,16 +682,17 @@ public class FastDeserializerGenerator<T> extends FastDeserializerGeneratorBase<
         JVar key = forBody.decl(keyClass, getVariableName("key"), keyValueExpression);
         JExpression mapValueExpression;
         JVar mapValueSchemaVar = null;
-        if (useGenericTypes)
-            mapValueSchemaVar = declareSchemaVar(mapSchema.getValueType(), getVariableName(name + "MapValue"),
+        if (action.getShouldRead() && useGenericTypes)
+            mapValueSchemaVar = declareSchemaVar(mapSchema.getValueType(), name + "MapValueSchema",
                     mapSchemaVar.invoke("getValueType"));
 
         if (SchemaAssistant.isComplexType(mapSchema.getValueType())) {
+            String valueName = name + "Value";
             JVar mapValueVar = null;
-            Schema readerMapValueSchema = readerMapSchema.getValueType();
-
+            Schema readerMapValueSchema = null;
             if (action.getShouldRead()) {
-                mapValueVar = declareValueVar(name, mapSchema.getValueType(), forBody);
+                mapValueVar = declareValueVar(valueName, mapSchema.getValueType(), forBody);
+                readerMapValueSchema = readerMapSchema.getValueType();
             }
             switch (mapSchema.getValueType().getType()) {
             case RECORD:
@@ -702,15 +700,15 @@ public class FastDeserializerGenerator<T> extends FastDeserializerGeneratorBase<
                         action);
                 break;
             case ARRAY:
-                processArray(mapValueSchemaVar, mapValueVar, name, mapSchema.getValueType(), readerMapValueSchema,
+                processArray(mapValueSchemaVar, mapValueVar, valueName, mapSchema.getValueType(), readerMapValueSchema,
                         forBody, action);
                 break;
             case MAP:
-                processMap(mapValueSchemaVar, mapValueVar, name, mapSchema.getValueType(), readerMapValueSchema,
+                processMap(mapValueSchemaVar, mapValueVar, valueName, mapSchema.getValueType(), readerMapValueSchema,
                         forBody, action);
                 break;
             case UNION:
-                processUnion(mapValueSchemaVar, mapValueVar, name, mapSchema.getValueType(), readerMapValueSchema,
+                processUnion(mapValueSchemaVar, mapValueVar, valueName, mapSchema.getValueType(), readerMapValueSchema,
                         forBody, action);
                 break;
             default:
@@ -854,6 +852,10 @@ public class FastDeserializerGenerator<T> extends FastDeserializerGeneratorBase<
         }
     }
 
+    private JVar declareSchemaVariableForRecordField(final String name, final Schema schema, JVar schemaVar) {
+        return declareSchemaVar(schema, name + "Field", schemaVar.invoke("getField").arg(name).invoke("schema"));
+    }
+
     private JVar declareValueVar(final String name, final Schema schema, JBlock block) {
         if (SchemaAssistant.isComplexType(schema)) {
             return block.decl(schemaAssistant.classFromSchema(schema), getVariableName(name), JExpr._null());
@@ -866,18 +868,36 @@ public class FastDeserializerGenerator<T> extends FastDeserializerGeneratorBase<
         if (!useGenericTypes) {
             return null;
         }
-        if (SchemaAssistant.isComplexType(valueSchema) || SchemaAssistant.isNamedType(valueSchema)) {
-            JVar schemaVar = schemaMapMethod.body().decl(codeModel.ref(Schema.class), getVariableName(variableName),
-                    getValueType);
-            registerSchema(valueSchema, schemaVar);
-            return schemaVar;
+        if (SchemaAssistant.isComplexType(valueSchema) || Schema.Type.ENUM.equals(valueSchema.getType())) {
+            int schemaId = getSchemaId(valueSchema);
+            if (schemaVarMap.get(schemaId) != null) {
+                return schemaVarMap.get(schemaId);
+            } else {
+                JVar schemaVar = schemaMapMethod.body().decl(codeModel.ref(Schema.class),
+                        getVariableName(variableName), getValueType);
+                registerSchema(valueSchema, schemaId, schemaVar);
+                schemaVarMap.put(schemaId, schemaVar);
+                return schemaVar;
+            }
         } else {
             return null;
         }
     }
 
-    private JVar declareSchemaVariableForRecordField(final String name, final Schema schema, JVar schemaVar) {
-        return declareSchemaVar(schema, name + "Field", schemaVar.invoke("getField").arg(name).invoke("schema"));
+    private void registerSchema(final Schema writerSchema, JVar schemaVar) {
+        registerSchema(writerSchema, getSchemaId(writerSchema), schemaVar);
+    }
+
+    private void registerSchema(final Schema writerSchema, int schemaId, JVar schemaVar) {
+        if ((Schema.Type.RECORD.equals(writerSchema.getType()) || Schema.Type.ENUM.equals(writerSchema.getType())
+                || Schema.Type.ARRAY.equals(writerSchema.getType())) && schemaNotRegistered(writerSchema)) {
+            schemaMap.put(schemaId, writerSchema);
+            schemaMapMethod.body().invoke(schemaMapField, "put").arg(JExpr.lit(schemaId)).arg(schemaVar);
+        }
+    }
+
+    private boolean schemaNotRegistered(final Schema schema) {
+        return !schemaMap.containsKey(getSchemaId(schema));
     }
 
     private boolean methodAlreadyDefined(final Schema schema, boolean read) {
@@ -919,20 +939,6 @@ public class FastDeserializerGenerator<T> extends FastDeserializerGeneratorBase<
         (read ? deserializeMethodMap : skipMethodMap).put(schema.getFullName(), method);
 
         return method;
-    }
-
-    private void registerSchema(final Schema writerSchema, JVar schemaVar) {
-        if ((Schema.Type.RECORD.equals(writerSchema.getType()) || Schema.Type.ENUM.equals(writerSchema.getType())
-                || Schema.Type.ARRAY.equals(writerSchema.getType())) && schemaNotRegistered(writerSchema)) {
-            schemaMap.put(getSchemaId(writerSchema), writerSchema);
-
-            schemaMapMethod.body().invoke(schemaMapField, "put").arg(JExpr.lit(getSchemaId(writerSchema)))
-                    .arg(schemaVar);
-        }
-    }
-
-    private boolean schemaNotRegistered(final Schema schema) {
-        return !schemaMap.containsKey(getSchemaId(schema));
     }
 
     private JInvocation getSchemaExpr(Schema schema) {

@@ -17,6 +17,7 @@ import com.google.common.hash.HashFunction;
 import com.google.common.hash.Hashing;
 import com.sun.codemodel.JCodeModel;
 import com.sun.codemodel.JDefinedClass;
+import org.apache.commons.lang3.StringUtils;
 
 public abstract class FastSerializerGeneratorBase<T> {
 
@@ -83,7 +84,7 @@ public abstract class FastSerializerGeneratorBase<T> {
     }
 
     protected static String getVariableName(String name) {
-        return name + nextRandomInt();
+        return StringUtils.uncapitalize(name) + nextRandomInt();
     }
 
     private static final Map<Schema, Integer> SCHEMA_IDS_CACHE = new ConcurrentHashMap<>();
