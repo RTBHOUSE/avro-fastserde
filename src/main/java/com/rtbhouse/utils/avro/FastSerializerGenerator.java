@@ -7,6 +7,7 @@ import java.util.Map;
 
 import org.apache.avro.Schema;
 import org.apache.avro.io.Encoder;
+import org.apache.commons.lang3.StringUtils;
 
 import com.sun.codemodel.JBlock;
 import com.sun.codemodel.JClass;
@@ -77,19 +78,19 @@ public class FastSerializerGenerator<T> extends FastSerializerGeneratorBase<T> {
         }
     }
 
-    private void processComplexType(Schema schema, JVar variable, JBlock body) {
+    private void processComplexType(Schema schema, JExpression valueExpr, JBlock body) {
         switch (schema.getType()) {
         case RECORD:
-            processRecord(schema, variable, body);
+            processRecord(schema, valueExpr, body);
             break;
         case ARRAY:
-            processArray(schema, variable, body);
+            processArray(schema, valueExpr, body);
             break;
         case UNION:
-            processUnion(schema, variable, body);
+            processUnion(schema, valueExpr, body);
             break;
         case MAP:
-            processMap(schema, variable, body);
+            processMap(schema, valueExpr, body);
             break;
         default:
             throw new FastSerializerGeneratorException("Not a complex schema type: " + schema.getType());
@@ -110,68 +111,66 @@ public class FastSerializerGenerator<T> extends FastSerializerGeneratorBase<T> {
         }
     }
 
-    private void processRecord(final Schema recordSchema, JVar recordVar, final JBlock containerBody) {
+    private void processRecord(final Schema recordSchema, JExpression recordExpr, final JBlock containerBody) {
         if (methodAlreadyDefined(recordSchema)) {
-            containerBody.invoke(getMethod(recordSchema)).arg(recordVar).arg(JExpr.direct(ENCODER));
+            containerBody.invoke(getMethod(recordSchema)).arg(recordExpr).arg(JExpr.direct(ENCODER));
             return;
         }
         JMethod method = createMethod(recordSchema);
-        containerBody.invoke(getMethod(recordSchema)).arg(recordVar).arg(JExpr.direct(ENCODER));
+        containerBody.invoke(getMethod(recordSchema)).arg(recordExpr).arg(JExpr.direct(ENCODER));
 
         JBlock body = method.body();
-        recordVar = method.listParams()[0];
+        recordExpr = method.listParams()[0];
 
         for (Schema.Field field : recordSchema.getFields()) {
             Schema fieldSchema = field.schema();
             if (SchemaAssistant.isComplexType(fieldSchema)) {
                 JClass fieldClass = schemaAssistant.classFromSchema(fieldSchema);
                 JVar containerVar = declareValueVar(field.name(), fieldSchema, body);
-                JExpression valueExpression = JExpr.invoke(recordVar, "get").arg(JExpr.lit(field.pos()));
+                JExpression valueExpression = JExpr.invoke(recordExpr, "get").arg(JExpr.lit(field.pos()));
                 containerVar.init(JExpr.cast(fieldClass, valueExpression));
 
                 processComplexType(fieldSchema, containerVar, body);
             } else {
-                processSimpleType(fieldSchema, recordVar.invoke("get").arg(JExpr.lit(field.pos())), body);
+                processSimpleType(fieldSchema, recordExpr.invoke("get").arg(JExpr.lit(field.pos())), body);
             }
 
         }
     }
 
-    private void processArray(final Schema arraySchema, JVar arrayVar, JBlock body) {
+    private void processArray(final Schema arraySchema, JExpression arrayExpr, JBlock body) {
         final JClass arrayClass = schemaAssistant.classFromSchema(arraySchema);
         body.invoke(JExpr.direct(ENCODER), "writeArrayStart");
 
-        final JExpression emptyArrayCondition = arrayVar.eq(JExpr._null())
-                .cor(JExpr.invoke(JExpr.cast(arrayClass, arrayVar), "size").eq(JExpr.lit(0)));
+        final JExpression emptyArrayCondition = arrayExpr.eq(JExpr._null())
+                .cor(JExpr.invoke(arrayExpr, "isEmpty"));
 
         final JConditional emptyArrayIf = body._if(emptyArrayCondition);
         final JBlock emptyArrayBlock = emptyArrayIf._then();
         emptyArrayBlock.invoke(JExpr.direct(ENCODER), "setItemCount").arg(JExpr.lit(0));
-        emptyArrayBlock.invoke(JExpr.direct(ENCODER), "writeArrayEnd");
 
         final JBlock nonEmptyArrayBlock = emptyArrayIf._else();
         nonEmptyArrayBlock.invoke(JExpr.direct(ENCODER), "setItemCount")
-                .arg(JExpr.invoke(JExpr.cast(arrayClass, arrayVar), "size"));
+                .arg(JExpr.invoke(arrayExpr, "size"));
         final JForLoop forLoop = nonEmptyArrayBlock._for();
         final JVar counter = forLoop.init(codeModel.INT, getVariableName("counter"), JExpr.lit(0));
-        forLoop.test(counter.lt(JExpr.invoke(JExpr.cast(arrayClass, arrayVar), "size")));
+        forLoop.test(counter.lt(JExpr.invoke(JExpr.cast(arrayClass, arrayExpr), "size")));
         forLoop.update(counter.incr());
         final JBlock forBody = forLoop.body();
         forBody.invoke(JExpr.direct(ENCODER), "startItem");
 
         final Schema elementSchema = arraySchema.getElementType();
         if (SchemaAssistant.isComplexType(elementSchema)) {
-            JVar containerVar = declareValueVar(getVariableName(elementSchema.getName()),
-                    elementSchema, forBody);
-            forBody.assign(containerVar, JExpr.invoke(JExpr.cast(arrayClass, arrayVar), "get").arg(counter));
+            JVar containerVar = declareValueVar(elementSchema.getName(), elementSchema, forBody);
+            forBody.assign(containerVar, JExpr.invoke(JExpr.cast(arrayClass, arrayExpr), "get").arg(counter));
             processComplexType(elementSchema, containerVar, forBody);
         } else {
-            processSimpleType(elementSchema, arrayVar.invoke("get").arg(counter), forBody);
+            processSimpleType(elementSchema, arrayExpr.invoke("get").arg(counter), forBody);
         }
-        nonEmptyArrayBlock.invoke(JExpr.direct(ENCODER), "writeArrayEnd");
+        body.invoke(JExpr.direct(ENCODER), "writeArrayEnd");
     }
 
-    private void processMap(final Schema mapSchema, JVar mapVar, JBlock body) {
+    private void processMap(final Schema mapSchema, JExpression mapExpr, JBlock body) {
 
         final JClass mapClass = schemaAssistant.classFromSchema(mapSchema);
 
@@ -179,19 +178,18 @@ public class FastSerializerGenerator<T> extends FastSerializerGeneratorBase<T> {
 
         body.invoke(JExpr.direct(ENCODER), "writeMapStart");
 
-        final JExpression emptyMapCondition = mapVar.eq(JExpr._null())
-                .cor(JExpr.invoke(JExpr.cast(mapClass, mapVar), "size").eq(JExpr.lit(0)));
+        final JExpression emptyMapCondition = mapExpr.eq(JExpr._null())
+                .cor(JExpr.invoke(mapExpr, "isEmpty"));
         final JConditional emptyMapIf = body._if(emptyMapCondition);
         final JBlock emptyMapBlock = emptyMapIf._then();
         emptyMapBlock.invoke(JExpr.direct(ENCODER), "setItemCount").arg(JExpr.lit(0));
-        emptyMapBlock.invoke(JExpr.direct(ENCODER), "writeMapEnd");
 
         final JBlock nonEmptyMapBlock = emptyMapIf._else();
         nonEmptyMapBlock.invoke(JExpr.direct(ENCODER), "setItemCount")
-                .arg(JExpr.invoke(JExpr.cast(mapClass, mapVar), "size"));
+                .arg(JExpr.invoke(mapExpr, "size"));
 
         final JForEach mapKeysLoop = nonEmptyMapBlock.forEach(keyClass, getVariableName("key"),
-                JExpr.invoke(JExpr.cast(mapClass, mapVar), "keySet"));
+                JExpr.invoke(JExpr.cast(mapClass, mapExpr), "keySet"));
 
         final JBlock forBody = mapKeysLoop.body();
         forBody.invoke(JExpr.direct(ENCODER), "startItem");
@@ -211,22 +209,22 @@ public class FastSerializerGenerator<T> extends FastSerializerGeneratorBase<T> {
         JVar containerVar;
         if (SchemaAssistant.isComplexType(valueSchema)) {
             containerVar = declareValueVar(valueSchema.getName(), valueSchema, forBody);
-            forBody.assign(containerVar, JExpr.invoke(JExpr.cast(mapClass, mapVar), "get").arg(mapKeysLoop.var()));
+            forBody.assign(containerVar, JExpr.invoke(JExpr.cast(mapClass, mapExpr), "get").arg(mapKeysLoop.var()));
 
             processComplexType(valueSchema, containerVar, forBody);
         } else {
-            processSimpleType(valueSchema, mapVar.invoke("get").arg(mapKeysLoop.var()), forBody);
+            processSimpleType(valueSchema, mapExpr.invoke("get").arg(mapKeysLoop.var()), forBody);
         }
-        nonEmptyMapBlock.invoke(JExpr.direct(ENCODER), "writeMapEnd");
+        body.invoke(JExpr.direct(ENCODER), "writeMapEnd");
     }
 
-    private void processUnion(final Schema unionSchema, JVar unionVar, JBlock body) {
+    private void processUnion(final Schema unionSchema, JExpression unionExpr, JBlock body) {
 
         JConditional ifBlock = null;
         for (Schema schemaOption : unionSchema.getTypes()) {
             // Special handling for null
             if (Schema.Type.NULL.equals(schemaOption.getType())) {
-                JExpression condition = unionVar.eq(JExpr._null());
+                JExpression condition = unionExpr.eq(JExpr._null());
                 ifBlock = ifBlock != null ? ifBlock._elseif(condition) : body._if(condition);
                 JBlock thenBlock = ifBlock._then();
                 thenBlock.invoke(JExpr.direct(ENCODER), "writeIndex")
@@ -237,27 +235,24 @@ public class FastSerializerGenerator<T> extends FastSerializerGeneratorBase<T> {
 
             JClass optionClass = schemaAssistant.classFromSchema(schemaOption);
             JClass rawOptionClass = schemaAssistant.classFromSchema(schemaOption, true, true);
-            JExpression condition = unionVar._instanceof(rawOptionClass);
+            JExpression condition = unionExpr._instanceof(rawOptionClass);
             if (useGenericTypes && SchemaAssistant.isNamedType(schemaOption)) {
                 condition = condition.cand(JExpr.invoke(JExpr.lit(schemaOption.getFullName()), "equals")
-                        .arg(JExpr.invoke(JExpr.cast(optionClass, unionVar), "getSchema").invoke("getFullName")));
+                        .arg(JExpr.invoke(JExpr.cast(optionClass, unionExpr), "getSchema").invoke("getFullName")));
             }
             ifBlock = ifBlock != null ? ifBlock._elseif(condition) : body._if(condition);
             JBlock thenBlock = ifBlock._then();
             thenBlock.invoke(JExpr.direct(ENCODER), "writeIndex")
                     .arg(JExpr.lit(unionSchema.getIndexNamed(schemaOption.getFullName())));
-            JVar optionVar = thenBlock
-                    .decl(optionClass, getVariableName(schemaOption.getName()), JExpr.cast(optionClass, unionVar));
-
             switch (schemaOption.getType()) {
             case UNION:
             case NULL:
                 throw new FastSerializerGeneratorException("Incorrect union subschema processing: " + schemaOption);
             default:
                 if (SchemaAssistant.isComplexType(schemaOption)) {
-                    processComplexType(schemaOption, optionVar, thenBlock);
+                    processComplexType(schemaOption, JExpr.cast(optionClass, unionExpr), thenBlock);
                 } else {
-                    processSimpleType(schemaOption, optionVar, thenBlock);
+                    processSimpleType(schemaOption, unionExpr, thenBlock);
                 }
             }
         }
@@ -322,7 +317,8 @@ public class FastSerializerGenerator<T> extends FastSerializerGeneratorBase<T> {
 
     private JVar declareValueVar(final String name, final Schema schema, JBlock block) {
         if (SchemaAssistant.isComplexType(schema)) {
-            return block.decl(schemaAssistant.classFromSchema(schema, true), getVariableName(name), JExpr._null());
+            return block.decl(schemaAssistant.classFromSchema(schema, true),
+                    getVariableName(StringUtils.uncapitalize(name)), JExpr._null());
         } else {
             throw new FastDeserializerGeneratorException("Incorrect container variable: " + schema.getType().getName());
         }

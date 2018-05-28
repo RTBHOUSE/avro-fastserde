@@ -9,6 +9,7 @@ import java.util.Iterator;
 import java.util.ListIterator;
 import java.util.Map;
 import java.util.Set;
+import java.util.function.BiConsumer;
 import java.util.stream.Collectors;
 
 import org.apache.avro.AvroRuntimeException;
@@ -16,6 +17,7 @@ import org.apache.avro.Schema;
 import org.apache.avro.io.Decoder;
 import org.apache.avro.io.parsing.ResolvingGrammarGenerator;
 import org.apache.avro.io.parsing.Symbol;
+import org.apache.commons.lang3.StringUtils;
 import org.codehaus.jackson.JsonNode;
 
 import com.sun.codemodel.JArray;
@@ -92,20 +94,19 @@ public class FastDeserializerGenerator<T> extends FastDeserializerGeneratorBase<
             JMethod deserializeMethod = deserializerClass.method(JMod.PUBLIC, readerSchemaClass, "deserialize");
 
             JBlock topLevelDeserializeBlock = new JBlock();
-            JVar result = declareValueVar("result", aliasedWriterSchema, topLevelDeserializeBlock);
 
             switch (aliasedWriterSchema.getType()) {
             case RECORD:
-                processRecord(readerSchemaVar, result, aliasedWriterSchema, reader, topLevelDeserializeBlock,
-                        fieldAction);
+                processRecord(readerSchemaVar, aliasedWriterSchema.getName(), aliasedWriterSchema, reader,
+                        topLevelDeserializeBlock, fieldAction, JBlock::_return);
                 break;
             case ARRAY:
-                processArray(readerSchemaVar, result, null, aliasedWriterSchema, reader, topLevelDeserializeBlock,
-                        fieldAction);
+                processArray(readerSchemaVar,  "array", aliasedWriterSchema, reader,
+                        topLevelDeserializeBlock, fieldAction, JBlock::_return);
                 break;
             case MAP:
-                processMap(readerSchemaVar, result, null, aliasedWriterSchema, reader, topLevelDeserializeBlock,
-                        fieldAction);
+                processMap(readerSchemaVar, "map", aliasedWriterSchema, reader,
+                        topLevelDeserializeBlock, fieldAction, JBlock::_return);
                 break;
             default:
                 throw new FastDeserializerGeneratorException(
@@ -128,8 +129,6 @@ public class FastDeserializerGenerator<T> extends FastDeserializerGeneratorBase<
             deserializeMethod._throws(codeModel.ref(IOException.class));
             deserializeMethod.param(Decoder.class, DECODER);
 
-            topLevelDeserializeBlock._return(result);
-
             Class<FastDeserializer<T>> clazz = compileClass(className);
             return clazz.getConstructor(Schema.class).newInstance(reader);
         } catch (JClassAlreadyExistsException e) {
@@ -139,8 +138,44 @@ public class FastDeserializerGenerator<T> extends FastDeserializerGeneratorBase<
         }
     }
 
-    private void processRecord(JVar recordSchemaVar, JVar recordVar,
-            final Schema recordWriterSchema, final Schema recordReaderSchema, JBlock body, FieldAction recordAction) {
+    private void processComplexType(JVar fieldSchemaVar, String name, Schema schema, Schema readerFieldSchema,
+            JBlock methodBody, FieldAction action, BiConsumer<JBlock, JExpression> putExpressionIntoParent) {
+        switch (schema.getType()) {
+        case RECORD:
+            processRecord(fieldSchemaVar, schema.getName(), schema, readerFieldSchema, methodBody, action,
+                    putExpressionIntoParent);
+            break;
+        case ARRAY:
+            processArray(fieldSchemaVar, name, schema, readerFieldSchema, methodBody, action, putExpressionIntoParent);
+            break;
+        case MAP:
+            processMap(fieldSchemaVar, name, schema, readerFieldSchema, methodBody, action, putExpressionIntoParent);
+            break;
+        case UNION:
+            processUnion(fieldSchemaVar, name, schema, readerFieldSchema, methodBody, action, putExpressionIntoParent);
+            break;
+        default:
+            throw new FastDeserializerGeneratorException("Incorrect complex type: " + action.getType());
+        }
+    }
+
+    private void processSimpleType(Schema schema, JBlock methodBody, FieldAction action,
+            BiConsumer<JBlock, JExpression> putExpressionIntoParent) {
+        switch (schema.getType()) {
+        case ENUM:
+            processEnum(schema, methodBody, action, putExpressionIntoParent);
+            break;
+        case FIXED:
+            processFixed(schema, methodBody, action, putExpressionIntoParent);
+            break;
+        default:
+            processPrimitive(schema, methodBody, action, putExpressionIntoParent);
+        }
+    }
+
+    private void processRecord(JVar recordSchemaVar, String recordName, final Schema recordWriterSchema,
+            final Schema recordReaderSchema, JBlock parentBody, FieldAction recordAction,
+            BiConsumer<JBlock, JExpression> putRecordIntoParent) {
 
         ListIterator<Symbol> actionIterator = actionIterator(recordAction);
 
@@ -148,10 +183,10 @@ public class FastDeserializerGenerator<T> extends FastDeserializerGeneratorBase<
             JMethod method = getMethod(recordWriterSchema, recordAction.getShouldRead());
             updateActualExceptions(method);
             JExpression readingExpression = JExpr.invoke(method).arg(JExpr.direct(DECODER));
-            if (recordVar != null) {
-                body.assign(recordVar, readingExpression);
+            if (recordAction.getShouldRead()) {
+                putRecordIntoParent.accept(parentBody, readingExpression);
             } else {
-                body.add((JStatement) readingExpression);
+                parentBody.add((JStatement) readingExpression);
             }
 
             // seek through actionIterator
@@ -165,8 +200,8 @@ public class FastDeserializerGenerator<T> extends FastDeserializerGeneratorBase<
                 return;
             }
             // seek through actionIterator also for default values
-            Set<String> fieldNamesSet = recordWriterSchema.getFields().stream().map(Schema.Field::name)
-                    .collect(Collectors.toSet());
+            Set<String> fieldNamesSet = recordWriterSchema.getFields()
+                    .stream().map(Schema.Field::name).collect(Collectors.toSet());
             for (Schema.Field readerField : recordReaderSchema.getFields()) {
                 if (!fieldNamesSet.contains(readerField.name())) {
                     forwardToExpectedDefault(actionIterator);
@@ -181,22 +216,24 @@ public class FastDeserializerGenerator<T> extends FastDeserializerGeneratorBase<
         Set<Class<? extends Exception>> exceptionsOnHigherLevel = schemaAssistant.getExceptionsFromStringable();
         schemaAssistant.resetExceptionsFromStringable();
 
-        if (recordVar != null) {
-            body.assign(recordVar, JExpr.invoke(method).arg(JExpr.direct(DECODER)));
+        if (recordAction.getShouldRead()) {
+            putRecordIntoParent.accept(parentBody, JExpr.invoke(method).arg(JExpr.direct(DECODER)));
         } else {
-            body.invoke(method).arg(JExpr.direct(DECODER));
+            parentBody.invoke(method).arg(JExpr.direct(DECODER));
         }
 
-        body = method.body();
+        final JBlock methodBody = method.body();
 
-        JVar result = null;
+        final JVar result;
         if (recordAction.getShouldRead()) {
             JClass recordClass = schemaAssistant.classFromSchema(recordWriterSchema);
             JInvocation newRecord = JExpr._new(schemaAssistant.classFromSchema(recordWriterSchema, false));
             if (useGenericTypes) {
                 newRecord = newRecord.arg(schemaMapField.invoke("get").arg(JExpr.lit(getSchemaId(recordWriterSchema))));
             }
-            result = body.decl(recordClass, "result", newRecord);
+            result = methodBody.decl(recordClass, recordName, newRecord);
+        } else {
+            result = null;
         }
 
         for (Schema.Field field : recordWriterSchema.getFields()) {
@@ -206,60 +243,27 @@ public class FastDeserializerGenerator<T> extends FastDeserializerGeneratorBase<
                 break;
             }
 
-            Schema.Field readerField = null;
             Schema readerFieldSchema = null;
             JVar fieldSchemaVar = null;
+            BiConsumer<JBlock, JExpression> putExpressionInRecord = null;
             if (action.getShouldRead()) {
-                readerField = recordReaderSchema.getField(field.name());
+                Schema.Field readerField = recordReaderSchema.getField(field.name());
                 readerFieldSchema = readerField.schema();
-                if (useGenericTypes)
-                    fieldSchemaVar = declareSchemaVar(field.schema(), field.name(), recordSchemaVar.invoke("getField").arg(field.name()).invoke("schema"));
+                final int readerFieldPos = readerField.pos();
+                putExpressionInRecord = (block, expression) -> block.invoke(result, "put")
+                        .arg(JExpr.lit(readerFieldPos)).arg(expression);
+                if (useGenericTypes) {
+                    fieldSchemaVar = declareSchemaVar(field.schema(), field.name(),
+                            recordSchemaVar.invoke("getField").arg(field.name()).invoke("schema"));
+                }
             }
 
-            JExpression fieldValueExpression;
             if (SchemaAssistant.isComplexType(field.schema())) {
-                JVar fieldValueVar = null;
-                if (action.getShouldRead()) {
-                    fieldValueVar = declareValueVar(field.name(), field.schema(), body);
-                }
-                switch (field.schema().getType()) {
-                case RECORD:
-                    processRecord(fieldSchemaVar, fieldValueVar, field.schema(), readerFieldSchema, body, action);
-                    break;
-                case ARRAY:
-                    processArray(fieldSchemaVar, fieldValueVar, field.name(), field.schema(), readerFieldSchema, body,
-                            action);
-                    break;
-                case MAP:
-                    processMap(fieldSchemaVar, fieldValueVar, field.name(), field.schema(), readerFieldSchema, body,
-                            action);
-                    break;
-                case UNION:
-                    processUnion(fieldSchemaVar, fieldValueVar, field.name(), field.schema(), readerFieldSchema, body,
-                            action);
-                    break;
-                default:
-                    throw new FastDeserializerGeneratorException("Incorrect complex type: " + action.getType());
-                }
-                fieldValueExpression = fieldValueVar;
+                processComplexType(fieldSchemaVar, field.name(), field.schema(), readerFieldSchema, methodBody, action,
+                        putExpressionInRecord);
             } else {
-                switch (field.schema().getType()) {
-                case ENUM:
-                    fieldValueExpression = processEnum(field.schema(), body, action);
-                    break;
-                case FIXED:
-                    fieldValueExpression = processFixed(field.schema(), body, action);
-                    break;
-                default:
-                    fieldValueExpression = processPrimitive(field.schema(), body, action);
-                }
+                processSimpleType(field.schema(), methodBody, action, putExpressionInRecord);
 
-            }
-            if (action.getShouldRead()) {
-                if (fieldValueExpression == null) {
-                    throw new FastDeserializerGeneratorException("Non-null value expression was expected!");
-                }
-                body.invoke(result, "put").arg(JExpr.lit(readerField.pos())).arg(fieldValueExpression);
             }
         }
 
@@ -276,15 +280,15 @@ public class FastDeserializerGenerator<T> extends FastDeserializerGeneratorBase<
                         schemaVar = declareSchemaVariableForRecordField(readerField.name(), readerField.schema(),
                                 recordSchemaVar);
                     }
-                    JExpression value = parseDefaultValue(readerField.schema(), readerField.defaultValue(), body,
+                    JExpression value = parseDefaultValue(readerField.schema(), readerField.defaultValue(), methodBody,
                             schemaVar, readerField.name());
-                    body.invoke(result, "put").arg(JExpr.lit(readerField.pos())).arg(value);
+                    methodBody.invoke(result, "put").arg(JExpr.lit(readerField.pos())).arg(value);
                 }
             }
         }
 
         if (recordAction.getShouldRead()) {
-            body._return(result);
+            methodBody._return(result);
         }
         exceptionFromMethodMap.put(method, schemaAssistant.getExceptionsFromStringable());
         schemaAssistant.setExceptionsFromStringable(exceptionsOnHigherLevel);
@@ -422,14 +426,12 @@ public class FastDeserializerGenerator<T> extends FastDeserializerGeneratorBase<
         }
     }
 
-    private void processUnion(JVar unionSchemaVar, JVar unionVar, final String name,
-            final Schema unionSchema, final Schema readerUnionSchema, JBlock body, FieldAction action) {
+    private void processUnion(JVar unionSchemaVar, final String name, final Schema unionSchema,
+            final Schema readerUnionSchema, JBlock body, FieldAction action,
+            BiConsumer<JBlock, JExpression> putValueIntoParent) {
         JVar unionIndex = body.decl(codeModel.INT, getVariableName("unionIndex"),
                 JExpr.direct(DECODER + ".readIndex()"));
-        JClass unionClass = schemaAssistant.classFromSchema(unionSchema);
-
         JConditional ifBlock = null;
-
         for (int i = 0; i < unionSchema.getTypes().size(); i++) {
             Schema optionSchema = unionSchema.getTypes().get(i);
             Schema readerOptionSchema = null;
@@ -458,8 +460,7 @@ public class FastDeserializerGenerator<T> extends FastDeserializerGeneratorBase<
                     throw new FastDeserializerGeneratorException("Unable to determine action for field: " + name);
                 }
 
-                Symbol.UnionAdjustAction unionAdjustAction =
-                        (Symbol.UnionAdjustAction) alternative.symbols[i].production[0];
+                Symbol.UnionAdjustAction unionAdjustAction = (Symbol.UnionAdjustAction) alternative.symbols[i].production[0];
                 unionAction = FieldAction.fromValues(optionSchema.getType(), action.getShouldRead(),
                         unionAdjustAction.symToParse);
             } else {
@@ -468,7 +469,7 @@ public class FastDeserializerGenerator<T> extends FastDeserializerGeneratorBase<
 
             JExpression condition = unionIndex.eq(JExpr.lit(i));
             ifBlock = ifBlock != null ? ifBlock._elseif(condition) : body._if(condition);
-            JBlock thenBlock = ifBlock._then();
+            final JBlock thenBlock = ifBlock._then();
 
             JVar optionSchemaVar = null;
             if (useGenericTypes && unionAction.getShouldRead()) {
@@ -476,54 +477,22 @@ public class FastDeserializerGenerator<T> extends FastDeserializerGeneratorBase<
                 optionSchemaVar = declareSchemaVar(optionSchema, name + "OptionSchema", optionSchemaExpression);
             }
 
-            JExpression optionValue;
             if (SchemaAssistant.isComplexType(optionSchema)) {
                 String optionName = name + "Option";
-                JVar optionValueVar = null;
-                if (unionAction.getShouldRead()) {
-                    optionValueVar = declareValueVar(name, optionSchema, thenBlock);
+                if (Schema.Type.UNION.equals(optionSchema.getType())) {
+                    throw new FastDeserializerGeneratorException("Union cannot be sub-type of union!");
                 }
-                switch (unionAction.getType()) {
-                case RECORD:
-                    processRecord(optionSchemaVar, optionValueVar, optionSchema, readerOptionSchema, thenBlock,
-                            unionAction);
-                    break;
-                case ARRAY:
-                    processArray(optionSchemaVar, optionValueVar, optionName, optionSchema, readerOptionSchema,
-                            thenBlock, unionAction);
-                    break;
-                case MAP:
-                    processMap(optionSchemaVar, optionValueVar, optionName, optionSchema, readerOptionSchema,
-                            thenBlock, unionAction);
-                    break;
-                default:
-                    throw new FastDeserializerGeneratorException("Unexpected complex type: " + action.getType());
-                }
-                optionValue = optionValueVar;
+                processComplexType(optionSchemaVar, optionName, optionSchema, readerOptionSchema, thenBlock,
+                        unionAction, putValueIntoParent);
             } else {
-                switch (unionAction.getType()) {
-                case ENUM:
-                    optionValue = processEnum(optionSchema, thenBlock, unionAction);
-                    break;
-                case FIXED:
-                    optionValue = processFixed(optionSchema, thenBlock, unionAction);
-                    break;
-                default:
-                    optionValue = processPrimitive(optionSchema, thenBlock, unionAction);
-                }
-            }
-            if (unionAction.getShouldRead()) {
-                if (optionValue == null) {
-                    throw new FastDeserializerGeneratorException(
-                            "Value expression was expected, got null instead!");
-                }
-                thenBlock.assign(unionVar, JExpr.cast(unionClass, optionValue));
+                processSimpleType(optionSchema, thenBlock, unionAction, putValueIntoParent);
             }
         }
     }
 
-    private void processArray(JVar arraySchemaVar, JVar arrayVar, final String name,
-            final Schema arraySchema, final Schema readerArraySchema, JBlock body, FieldAction action) {
+    private void processArray(JVar arraySchemaVar, final String name, final Schema arraySchema,
+            final Schema readerArraySchema, JBlock parentBody, FieldAction action,
+            BiConsumer<JBlock, JExpression> putArrayIntoParent) {
 
         if (action.getShouldRead()) {
             Symbol valuesActionSymbol = null;
@@ -545,10 +514,11 @@ public class FastDeserializerGenerator<T> extends FastDeserializerGeneratorBase<
             action = FieldAction.fromValues(arraySchema.getElementType().getType(), false, EMPTY_SYMBOL);
         }
 
-        JVar chunkLen = body.decl(codeModel.LONG, getVariableName("chunkLen"),
+        final JVar arrayVar = action.getShouldRead() ? declareValueVar(name, arraySchema, parentBody) : null;
+        JVar chunkLen = parentBody.decl(codeModel.LONG, getVariableName("chunkLen"),
                 JExpr.direct(DECODER + ".readArrayStart()"));
 
-        JConditional conditional = body._if(chunkLen.gt(JExpr.lit(0)));
+        JConditional conditional = parentBody._if(chunkLen.gt(JExpr.lit(0)));
         JBlock ifBlock = conditional._then();
 
         JClass arrayClass = schemaAssistant.classFromSchema(arraySchema, false);
@@ -574,65 +544,36 @@ public class FastDeserializerGenerator<T> extends FastDeserializerGeneratorBase<
         forLoop.update(counter.incr());
         JBlock forBody = forLoop.body();
 
-        JExpression elementValueExpression;
         JVar elementSchemaVar = null;
-        if (action.getShouldRead() && useGenericTypes) {
-            elementSchemaVar = declareSchemaVar(arraySchema.getElementType(), name + "ArrayElemSchema",
-                    arraySchemaVar.invoke("getElementType"));
+        BiConsumer<JBlock, JExpression> putValueInArray = null;
+        if (action.getShouldRead()) {
+            putValueInArray = (block, expression) -> block.invoke(arrayVar, "add").arg(expression);
+            if (useGenericTypes) {
+                elementSchemaVar = declareSchemaVar(arraySchema.getElementType(), name + "ArrayElemSchema",
+                        arraySchemaVar.invoke("getElementType"));
+            }
         }
 
         if (SchemaAssistant.isComplexType(arraySchema.getElementType())) {
             String elemName = name + "Elem";
-            JVar elementValueVar = null;
             Schema readerArrayElementSchema = null;
             if (action.getShouldRead()) {
-                elementValueVar = declareValueVar(elemName, arraySchema.getElementType(), forBody);
                 readerArrayElementSchema = readerArraySchema.getElementType();
             }
-            switch (arraySchema.getElementType().getType()) {
-            case RECORD:
-                processRecord(elementSchemaVar, elementValueVar, arraySchema.getElementType(), readerArrayElementSchema,
-                        forBody, action);
-                break;
-            case ARRAY:
-                processArray(elementSchemaVar, elementValueVar, elemName, arraySchema.getElementType(),
-                        readerArrayElementSchema, forBody, action);
-                break;
-            case MAP:
-                processMap(elementSchemaVar, elementValueVar, elemName, arraySchema.getElementType(),
-                        readerArrayElementSchema, forBody, action);
-                break;
-            case UNION:
-                processUnion(elementSchemaVar, elementValueVar, elemName, arraySchema.getElementType(),
-                        readerArrayElementSchema, forBody, action);
-                break;
-            default:
-                throw new FastDeserializerGeneratorException("Unexpected complex type: " + action.getType());
-            }
-            elementValueExpression = elementValueVar;
+            processComplexType(elementSchemaVar, elemName, arraySchema.getElementType(), readerArrayElementSchema,
+                    forBody, action, putValueInArray);
         } else {
-            switch (arraySchema.getElementType().getType()) {
-            case ENUM:
-                elementValueExpression = processEnum(arraySchema.getElementType(), forBody, action);
-                break;
-            case FIXED:
-                elementValueExpression = processFixed(arraySchema.getElementType(), forBody, action);
-                break;
-            default:
-                elementValueExpression = processPrimitive(arraySchema.getElementType(), forBody, action);
-            }
-        }
-        if (action.getShouldRead()) {
-            if (elementValueExpression == null) {
-                throw new FastDeserializerGeneratorException("Value expression was expected, got null instead!");
-            }
-            forBody.invoke(arrayVar, "add").arg(elementValueExpression);
+            processSimpleType(arraySchema.getElementType(), forBody, action, putValueInArray);
         }
         doLoop.body().assign(chunkLen, JExpr.direct(DECODER + ".arrayNext()"));
+
+        if (action.getShouldRead()) {
+            putArrayIntoParent.accept(parentBody, arrayVar);
+        }
     }
 
-    private void processMap(JVar mapSchemaVar, JVar mapVar, final String name,
-            final Schema mapSchema, final Schema readerMapSchema, JBlock body, FieldAction action) {
+    private void processMap(JVar mapSchemaVar, final String name, final Schema mapSchema, final Schema readerMapSchema,
+            JBlock parentBody, FieldAction action, BiConsumer<JBlock, JExpression> putMapIntoParent) {
 
         if (action.getShouldRead()) {
             Symbol valuesActionSymbol = null;
@@ -654,10 +595,11 @@ public class FastDeserializerGenerator<T> extends FastDeserializerGeneratorBase<
             action = FieldAction.fromValues(mapSchema.getValueType().getType(), false, EMPTY_SYMBOL);
         }
 
-        JVar chunkLen = body.decl(codeModel.LONG, getVariableName("chunkLen"),
+        final JVar mapVar = action.getShouldRead() ? declareValueVar(name, mapSchema, parentBody) : null;
+        JVar chunkLen = parentBody.decl(codeModel.LONG, getVariableName("chunkLen"),
                 JExpr.direct(DECODER + ".readMapStart()"));
 
-        JConditional conditional = body._if(chunkLen.gt(JExpr.lit(0)));
+        JConditional conditional = parentBody._if(chunkLen.gt(JExpr.lit(0)));
         JBlock ifBlock = conditional._then();
 
         if (action.getShouldRead()) {
@@ -680,65 +622,34 @@ public class FastDeserializerGenerator<T> extends FastDeserializerGeneratorBase<
         }
 
         JVar key = forBody.decl(keyClass, getVariableName("key"), keyValueExpression);
-        JExpression mapValueExpression;
         JVar mapValueSchemaVar = null;
-        if (action.getShouldRead() && useGenericTypes)
+        if (action.getShouldRead() && useGenericTypes) {
             mapValueSchemaVar = declareSchemaVar(mapSchema.getValueType(), name + "MapValueSchema",
                     mapSchemaVar.invoke("getValueType"));
-
+        }
+        BiConsumer<JBlock, JExpression> putValueInMap = null;
+        if (action.getShouldRead()) {
+            putValueInMap = (block, expression) -> block.invoke(mapVar, "put").arg(key).arg(expression);
+        }
         if (SchemaAssistant.isComplexType(mapSchema.getValueType())) {
             String valueName = name + "Value";
-            JVar mapValueVar = null;
             Schema readerMapValueSchema = null;
             if (action.getShouldRead()) {
-                mapValueVar = declareValueVar(valueName, mapSchema.getValueType(), forBody);
                 readerMapValueSchema = readerMapSchema.getValueType();
             }
-            switch (mapSchema.getValueType().getType()) {
-            case RECORD:
-                processRecord(mapValueSchemaVar, mapValueVar, mapSchema.getValueType(), readerMapValueSchema, forBody,
-                        action);
-                break;
-            case ARRAY:
-                processArray(mapValueSchemaVar, mapValueVar, valueName, mapSchema.getValueType(), readerMapValueSchema,
-                        forBody, action);
-                break;
-            case MAP:
-                processMap(mapValueSchemaVar, mapValueVar, valueName, mapSchema.getValueType(), readerMapValueSchema,
-                        forBody, action);
-                break;
-            case UNION:
-                processUnion(mapValueSchemaVar, mapValueVar, valueName, mapSchema.getValueType(), readerMapValueSchema,
-                        forBody, action);
-                break;
-            default:
-                throw new FastDeserializerGeneratorException("Incorrect complex type: " + action.getType());
-            }
-            mapValueExpression = mapValueVar;
+            processComplexType(mapValueSchemaVar, valueName, mapSchema.getValueType(), readerMapValueSchema, forBody,
+                    action, putValueInMap);
         } else {
-            switch (mapSchema.getValueType().getType()) {
-            case ENUM:
-                mapValueExpression = processEnum(mapSchema.getValueType(), forBody, action);
-                break;
-            case FIXED:
-                mapValueExpression = processFixed(mapSchema.getValueType(), forBody, action);
-                break;
-            default:
-                mapValueExpression = processPrimitive(mapSchema.getValueType(), forBody, action);
-            }
+            processSimpleType(mapSchema.getValueType(), forBody, action, putValueInMap);
         }
         doLoop.body().assign(chunkLen, JExpr.direct(DECODER + ".mapNext()"));
-
         if (action.getShouldRead()) {
-            if (mapValueExpression == null) {
-                throw new FastDeserializerGeneratorException(
-                        "Value expression was expected, got null instead!");
-            }
-            forBody.invoke(mapVar, "put").arg(key).arg(mapValueExpression);
+            putMapIntoParent.accept(parentBody, mapVar);
         }
     }
 
-    private JExpression processFixed(final Schema schema, JBlock body, FieldAction action) {
+    private void processFixed(final Schema schema, JBlock body, FieldAction action,
+            BiConsumer<JBlock, JExpression> putFixedIntoParent) {
         if (action.getShouldRead()) {
             JVar fixedBuffer = body.decl(codeModel.ref(byte[].class), getVariableName(schema.getName()))
                     .init(JExpr.direct(" new byte[" + schema.getFixedSize() + "]"));
@@ -749,14 +660,14 @@ public class FastDeserializerGenerator<T> extends FastDeserializerGeneratorBase<
             if (useGenericTypes)
                 createFixed = createFixed.arg(getSchemaExpr(schema));
 
-            return createFixed.arg(fixedBuffer);
+            putFixedIntoParent.accept(body, createFixed.arg(fixedBuffer));
         } else {
             body.directStatement(DECODER + ".skipFixed(" + schema.getFixedSize() + ");");
-            return null;
         }
     }
 
-    private JExpression processEnum(final Schema schema, final JBlock body, FieldAction action) {
+    private void processEnum(final Schema schema, final JBlock body, FieldAction action,
+            BiConsumer<JBlock, JExpression> putEnumIntoParent) {
 
         if (action.getShouldRead()) {
 
@@ -799,16 +710,15 @@ public class FastDeserializerGenerator<T> extends FastDeserializerGeneratorBase<
                     body._if(enumIndex.eq(JExpr.lit(i)))._then().assign((JVar) newEnum, ithVal);
                 }
             }
-
-            return newEnum;
+            putEnumIntoParent.accept(body, newEnum);
         } else {
             body.directStatement(DECODER + ".readEnum();");
-            return null;
         }
 
     }
 
-    private JExpression processPrimitive(final Schema schema, JBlock body, FieldAction action) {
+    private void processPrimitive(final Schema schema, JBlock body, FieldAction action,
+            BiConsumer<JBlock, JExpression> putValueIntoParent) {
 
         String readFunction;
         switch (schema.getType()) {
@@ -844,11 +754,9 @@ public class FastDeserializerGenerator<T> extends FastDeserializerGeneratorBase<
                 primitiveValueExpression = JExpr._new(schemaAssistant.classFromSchema(schema))
                         .arg(primitiveValueExpression);
             }
-
-            return primitiveValueExpression;
+            putValueIntoParent.accept(body, primitiveValueExpression);
         } else {
             body.directStatement(DECODER + "." + readFunction + ";");
-            return null;
         }
     }
 
@@ -858,7 +766,7 @@ public class FastDeserializerGenerator<T> extends FastDeserializerGeneratorBase<
 
     private JVar declareValueVar(final String name, final Schema schema, JBlock block) {
         if (SchemaAssistant.isComplexType(schema)) {
-            return block.decl(schemaAssistant.classFromSchema(schema), getVariableName(name), JExpr._null());
+            return block.decl(schemaAssistant.classFromSchema(schema), getVariableName(StringUtils.uncapitalize(name)), JExpr._null());
         } else {
             throw new FastDeserializerGeneratorException("Only complex types allowed!");
         }
@@ -874,7 +782,7 @@ public class FastDeserializerGenerator<T> extends FastDeserializerGeneratorBase<
                 return schemaVarMap.get(schemaId);
             } else {
                 JVar schemaVar = schemaMapMethod.body().decl(codeModel.ref(Schema.class),
-                        getVariableName(variableName), getValueType);
+                        getVariableName(StringUtils.uncapitalize(variableName)), getValueType);
                 registerSchema(valueSchema, schemaId, schemaVar);
                 schemaVarMap.put(schemaId, schemaVar);
                 return schemaVar;

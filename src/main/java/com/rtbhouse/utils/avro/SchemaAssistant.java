@@ -241,20 +241,9 @@ public class SchemaAssistant {
 
     public static boolean isNamedType(Schema schema) {
         switch (schema.getType()) {
-            case RECORD:
-            case ENUM:
-            case FIXED:
-                return true;
-            default:
-                return false;
-        }
-    }
-
-    public static boolean needsRegisteredSchema(Schema schema) {
-        switch (schema.getType()) {
         case RECORD:
-        case ARRAY:
         case ENUM:
+        case FIXED:
             return true;
         default:
             return false;
