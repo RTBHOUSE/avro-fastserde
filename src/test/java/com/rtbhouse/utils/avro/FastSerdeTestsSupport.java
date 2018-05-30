@@ -13,6 +13,7 @@ import org.apache.avro.io.BinaryEncoder;
 import org.apache.avro.io.Decoder;
 import org.apache.avro.io.DecoderFactory;
 import org.apache.avro.io.EncoderFactory;
+import org.apache.avro.specific.SpecificDatumReader;
 import org.apache.avro.specific.SpecificDatumWriter;
 import org.apache.avro.specific.SpecificRecord;
 import org.codehaus.jackson.node.NullNode;
@@ -129,5 +130,15 @@ public final class FastSerdeTestsSupport {
         return DecoderFactory.get().binaryDecoder(baos.toByteArray(), null);
     }
 
+
+    public static <T> T specificDataFromDecoder(Schema writerSchema, Decoder decoder) {
+        SpecificDatumReader<T> datumReader = new SpecificDatumReader<>(writerSchema);
+        try {
+            return datumReader.read(null, decoder);
+        } catch (Exception e) {
+            throw new RuntimeException(e);
+        }
+
+    }
 
 }

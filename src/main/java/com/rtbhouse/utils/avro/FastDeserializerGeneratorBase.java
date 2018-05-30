@@ -20,6 +20,7 @@ import com.google.common.base.Charsets;
 import com.google.common.collect.Lists;
 import com.google.common.hash.HashFunction;
 import com.google.common.hash.Hashing;
+import com.sun.codemodel.JBlock;
 import com.sun.codemodel.JCodeModel;
 import com.sun.codemodel.JDefinedClass;
 
@@ -297,5 +298,18 @@ public abstract class FastDeserializerGeneratorBase<T> {
 
     protected static int nextRandomInt() {
         return Math.abs(ThreadLocalRandom.current().nextInt());
+    }
+
+    protected static void assignBlockToBody(Object codeContainer, JBlock body) {
+        try {
+            Field field = codeContainer.getClass().getDeclaredField("body");
+
+            field.setAccessible(true);
+            field.set(codeContainer, body);
+            field.setAccessible(false);
+
+        } catch (ReflectiveOperationException e) {
+            throw new FastDeserializerGeneratorException(e);
+        }
     }
 }
