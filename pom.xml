@@ -27,6 +27,12 @@
             <organization>RTB HOUSE</organization>
             <organizationUrl>http://www.rtbhouse.com</organizationUrl>
         </developer>
+        <developer>
+            <name>Michal Jagielski</name>
+            <email>michal.jagielski@rtbhouse.com</email>
+            <organization>RTB HOUSE</organization>
+            <organizationUrl>http://www.rtbhouse.com</organizationUrl>
+        </developer>
     </developers>
 
     <scm>
@@ -64,7 +70,7 @@
         <guava.version>19.0</guava.version>
         <apache.commons-lang3.version>3.4</apache.commons-lang3.version>
         <code.model.version>2.6</code.model.version>
-        <avro.version>1.7.7</avro.version>
+        <avro.version>1.8.2</avro.version>
         <benchmark.skip>true</benchmark.skip>
     </properties>
 
