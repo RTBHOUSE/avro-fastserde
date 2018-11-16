@@ -7,7 +7,7 @@ import org.openjdk.jmh.annotations.State;
 
 import com.rtbhouse.utils.generated.avro.benchmark.UnionSmallAndDeep;
 
-@State(Scope.Thread)
+@State(Scope.Benchmark)
 @Fork(1)
 public class UnionSmallAndDeepRecordBenchmark extends RecordBenchmarkBase<UnionSmallAndDeep> {
 
@@ -34,27 +34,27 @@ public class UnionSmallAndDeepRecordBenchmark extends RecordBenchmarkBase<UnionS
 
     @Benchmark
     public void genericDatumWriter() throws Exception {
-       super.genericDatumWriter();
+        super.genericDatumWriter();
     }
 
     @Benchmark
     public void fastSpecificDatumReader() throws Exception {
-       super.fastSpecificDatumReader();
+        super.fastSpecificDatumReader();
     }
 
     @Benchmark
     public void specificDatumReader() throws Exception {
-       super.specificDatumReader();
+        super.specificDatumReader();
     }
 
     @Benchmark
     public void fastSpecificDatumWriter() throws Exception {
-       super.fastSpecificDatumWriter();
+        super.fastSpecificDatumWriter();
     }
 
     @Benchmark
     public void specificDatumWriter() throws Exception {
-       super.specificDatumWriter();
+        super.specificDatumWriter();
     }
 
 }

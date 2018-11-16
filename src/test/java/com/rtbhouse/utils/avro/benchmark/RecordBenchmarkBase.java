@@ -23,13 +23,13 @@ import com.rtbhouse.utils.avro.FastSpecificDatumReader;
 import com.rtbhouse.utils.avro.FastSpecificDatumWriter;
 
 public abstract class RecordBenchmarkBase<T extends SpecificRecord> {
+    private static final FastSerdeCache cache = new FastSerdeCache(Runnable::run);
 
     protected Schema specificRecordSchema;
 
     private List<GenericData.Record> genericRecords = new ArrayList<>();
     private List<T> specificRecords = new ArrayList<>();
     private List<byte[]> recordBytes = new ArrayList<>();
-    private FastSerdeCache cache;
 
     private FastGenericDatumReader<GenericData.Record> fastGenericDatumReader;
     private FastGenericDatumWriter<GenericData.Record> fastGenericDatumWriter;
@@ -43,8 +43,6 @@ public abstract class RecordBenchmarkBase<T extends SpecificRecord> {
 
     @Setup
     public void init() throws Exception {
-        cache = new FastSerdeCache(Runnable::run);
-
         final GenericDatumWriter<GenericData.Record> datumWriter = new GenericDatumWriter<>(specificRecordSchema);
         for (int i = 0; i < 1000; i++) {
             ByteArrayOutputStream baos = new ByteArrayOutputStream();
