@@ -109,7 +109,7 @@ public final class FastSerdeCache {
             }
 
             classLoader = URLClassLoader.newInstance(new URL[] { classesDir.toURI().toURL() },
-                FastSerdeCache.class.getClassLoader());
+                    FastSerdeCache.class.getClassLoader());
 
         } catch (IOException e) {
             throw new RuntimeException(e);
@@ -132,7 +132,7 @@ public final class FastSerdeCache {
             }
 
             classLoader = URLClassLoader.newInstance(new URL[] { classesDir.toURI().toURL() },
-                FastSerdeCache.class.getClassLoader());
+                    FastSerdeCache.class.getClassLoader());
 
         } catch (IOException e) {
             throw new RuntimeException(e);
@@ -142,8 +142,8 @@ public final class FastSerdeCache {
     }
 
     /**
-     * Gets default {@link FastSerdeCache} instance. Default instance classpath can be customized via {@value #CLASSPATH} or
-     * {@value #CLASSPATH_SUPPLIER} system properties.
+     * Gets default {@link FastSerdeCache} instance. Default instance classpath can be customized via
+     * {@value #CLASSPATH} or {@value #CLASSPATH_SUPPLIER} system properties.
      *
      * @return default {@link FastSerdeCache} instance
      */
@@ -158,19 +158,19 @@ public final class FastSerdeCache {
                         try {
                             Class<?> classPathSupplierClass = Class.forName(classpathSupplierClassName);
                             if (Supplier.class.isAssignableFrom(classPathSupplierClass) && String.class
-                                .equals((Class<?>) ((ParameterizedType) classPathSupplierClass
-                                    .getGenericSuperclass())
-                                    .getActualTypeArguments()[0])) {
+                                    .equals((Class<?>) ((ParameterizedType) classPathSupplierClass
+                                            .getGenericSuperclass())
+                                                    .getActualTypeArguments()[0])) {
 
                                 classpathSupplier = (Supplier<String>) classPathSupplierClass.newInstance();
                             } else {
                                 LOGGER.log(Level.WARNING,
-                                    "classpath supplier must be subtype of java.util.function.Supplier: "
-                                        + classpathSupplierClassName);
+                                        "classpath supplier must be subtype of java.util.function.Supplier: "
+                                                + classpathSupplierClassName);
                             }
                         } catch (ReflectiveOperationException e) {
                             LOGGER.log(Level.WARNING,
-                                "unable to instantiate classpath supplier: " + classpathSupplierClassName, e);
+                                    "unable to instantiate classpath supplier: " + classpathSupplierClassName, e);
                         }
                         INSTANCE = new FastSerdeCache(classpathSupplier);
                     } else if (classPath != null) {
@@ -187,22 +187,28 @@ public final class FastSerdeCache {
     /**
      * Generates if needed and returns specific-class aware avro {@link FastDeserializer}.
      *
-     * @param writerSchema {@link Schema} of written data
-     * @param readerSchema {@link Schema} intended to be used during deserialization
+     * @param writerSchema
+     *            {@link Schema} of written data
+     * @param readerSchema
+     *            {@link Schema} intended to be used during deserialization
      * @return specific-class aware avro {@link FastDeserializer}
      */
     public FastDeserializer<?> getFastSpecificDeserializer(Schema writerSchema,
-        Schema readerSchema) {
-        FastDeserializer<?> deserializer = fastSpecificRecordDeserializersCache.putIfAbsent(
-            getSchemaKey(writerSchema, readerSchema),
-            d -> new SpecificDatumReader<>(writerSchema, readerSchema).read(null, d));
+            Schema readerSchema) {
+        String schemaKey = getSchemaKey(writerSchema, readerSchema);
+        FastDeserializer<?> deserializer = fastSpecificRecordDeserializersCache.get(schemaKey);
+
         if (deserializer == null) {
-            deserializer = fastSpecificRecordDeserializersCache.get(getSchemaKey(writerSchema, readerSchema));
-            CompletableFuture
-                .supplyAsync(() -> buildSpecificDeserializer(writerSchema, readerSchema), executor).thenAccept(
-                d -> {
-                    fastSpecificRecordDeserializersCache.put(getSchemaKey(writerSchema, readerSchema), d);
-                });
+            deserializer = fastSpecificRecordDeserializersCache.putIfAbsent(schemaKey,
+                    d -> new SpecificDatumReader<>(writerSchema, readerSchema).read(null, d));
+            if (deserializer == null) {
+                deserializer = fastSpecificRecordDeserializersCache.get(schemaKey);
+                CompletableFuture
+                        .supplyAsync(() -> buildSpecificDeserializer(writerSchema, readerSchema), executor).thenAccept(
+                                d -> {
+                                    fastSpecificRecordDeserializersCache.put(schemaKey, d);
+                                });
+            }
         }
 
         return deserializer;
@@ -211,21 +217,28 @@ public final class FastSerdeCache {
     /**
      * Generates if needed and returns generic-class aware avro {@link FastDeserializer}.
      *
-     * @param writerSchema {@link Schema} of written data
-     * @param readerSchema {@link Schema} intended to be used during deserialization
+     * @param writerSchema
+     *            {@link Schema} of written data
+     * @param readerSchema
+     *            {@link Schema} intended to be used during deserialization
      * @return generic-class aware avro {@link FastDeserializer}
      */
     public FastDeserializer<?> getFastGenericDeserializer(Schema writerSchema, Schema readerSchema) {
-        FastDeserializer<?> deserializer = fastGenericRecordDeserializersCache.putIfAbsent(
-            getSchemaKey(writerSchema, readerSchema),
-            d -> new GenericDatumReader<>(writerSchema, readerSchema).read(null, d));
+        String schemaKey = getSchemaKey(writerSchema, readerSchema);
+        FastDeserializer<?> deserializer = fastGenericRecordDeserializersCache.get(schemaKey);
+
         if (deserializer == null) {
-            deserializer = fastGenericRecordDeserializersCache.get(getSchemaKey(writerSchema, readerSchema));
-            CompletableFuture
-                .supplyAsync(() -> buildGenericDeserializer(writerSchema, readerSchema), executor).thenAccept(
-                d -> {
-                    fastGenericRecordDeserializersCache.put(getSchemaKey(writerSchema, readerSchema), d);
-                });
+            deserializer = fastGenericRecordDeserializersCache.putIfAbsent(
+                    schemaKey,
+                    d -> new GenericDatumReader<>(writerSchema, readerSchema).read(null, d));
+            if (deserializer == null) {
+                deserializer = fastGenericRecordDeserializersCache.get(schemaKey);
+                CompletableFuture
+                        .supplyAsync(() -> buildGenericDeserializer(writerSchema, readerSchema), executor).thenAccept(
+                                d -> {
+                                    fastGenericRecordDeserializersCache.put(schemaKey, d);
+                                });
+            }
         }
         return deserializer;
     }
@@ -233,20 +246,25 @@ public final class FastSerdeCache {
     /**
      * Generates if needed and returns specific-class aware avro {@link FastSerializer}.
      *
-     * @param schema {@link Schema} of data to write
+     * @param schema
+     *            {@link Schema} of data to write
      * @return specific-class aware avro {@link FastSerializer}
      */
     public FastSerializer<?> getFastSpecificSerializer(Schema schema) {
-        FastSerializer<?> serializer = fastSpecificRecordSerializersCache.putIfAbsent(
-            getSchemaKey(schema, schema),
-            (d, e) -> new SpecificDatumWriter<>(schema).write(d, e));
+        String schemaKey = getSchemaKey(schema, schema);
+        FastSerializer<?> serializer = fastSpecificRecordSerializersCache.get(schemaKey);
         if (serializer == null) {
-            serializer = fastSpecificRecordSerializersCache.get(getSchemaKey(schema, schema));
-            CompletableFuture
-                .supplyAsync(() -> buildSpecificSerializer(schema), executor).thenAccept(
-                s -> {
-                    fastSpecificRecordSerializersCache.put(getSchemaKey(schema, schema), s);
-                });
+            serializer = fastSpecificRecordSerializersCache.putIfAbsent(
+                    schemaKey,
+                    (d, e) -> new SpecificDatumWriter<>(schema).write(d, e));
+            if (serializer == null) {
+                serializer = fastSpecificRecordSerializersCache.get(schemaKey);
+                CompletableFuture
+                        .supplyAsync(() -> buildSpecificSerializer(schema), executor).thenAccept(
+                                s -> {
+                                    fastSpecificRecordSerializersCache.put(schemaKey, s);
+                                });
+            }
         }
 
         return serializer;
@@ -255,42 +273,48 @@ public final class FastSerdeCache {
     /**
      * Generates if needed and returns generic-class aware avro {@link FastSerializer}.
      *
-     * @param schema {@link Schema} of data to write
+     * @param schema
+     *            {@link Schema} of data to write
      * @return generic-class aware avro {@link FastSerializer}
      */
     public FastSerializer<?> getFastGenericSerializer(Schema schema) {
-        FastSerializer<?> serializer = fastGenericRecordSerializersCache.putIfAbsent(
-            getSchemaKey(schema, schema),
-            (d, e) -> new GenericDatumWriter<>(schema).write(d, e));
+        String schemaKey = getSchemaKey(schema, schema);
+
+        FastSerializer<?> serializer = fastGenericRecordSerializersCache.get(schemaKey);
         if (serializer == null) {
-            serializer = fastGenericRecordSerializersCache.get(getSchemaKey(schema, schema));
-            CompletableFuture
-                .supplyAsync(() -> buildGenericSerializer(schema), executor).thenAccept(
-                s -> {
-                    fastGenericRecordSerializersCache.put(getSchemaKey(schema, schema), s);
-                });
+            serializer = fastGenericRecordSerializersCache.putIfAbsent(
+                    schemaKey,
+                    (d, e) -> new GenericDatumWriter<>(schema).write(d, e));
+            if (serializer == null) {
+                serializer = fastGenericRecordSerializersCache.get(schemaKey);
+                CompletableFuture
+                        .supplyAsync(() -> buildGenericSerializer(schema), executor).thenAccept(
+                                s -> {
+                                    fastGenericRecordSerializersCache.put(schemaKey, s);
+                                });
+            }
         }
         return serializer;
     }
 
     private String getSchemaKey(Schema writerSchema, Schema readerSchema) {
         return String.valueOf(Math.abs(FastDeserializerGeneratorBase.getSchemaId(writerSchema)))
-            + Math.abs(FastDeserializerGeneratorBase.getSchemaId(readerSchema));
+                + Math.abs(FastDeserializerGeneratorBase.getSchemaId(readerSchema));
     }
 
     private FastDeserializer<?> buildSpecificDeserializer(Schema writerSchema, Schema readerSchema) {
         try {
             String className = FastDeserializerGeneratorBase.getClassName(writerSchema, readerSchema, "Specific");
             Optional<Path> clazzFile = Files.walk(classesDir.toPath()).filter(p -> p.getFileName()
-                .startsWith(className + ".class")).findFirst();
+                    .startsWith(className + ".class")).findFirst();
             if (clazzFile.isPresent()) {
                 Class<FastDeserializer<?>> fastDeserializerClass = (Class<FastDeserializer<?>>) classLoader
-                    .loadClass(FastDeserializerGeneratorBase.GENERATED_PACKAGE_NAME + "." + className);
+                        .loadClass(FastDeserializerGeneratorBase.GENERATED_PACKAGE_NAME + "." + className);
 
                 return fastDeserializerClass.newInstance();
             } else {
                 FastSpecificDeserializerGenerator<?> generator = new FastSpecificDeserializerGenerator<>(
-                    writerSchema, readerSchema, classesDir, classLoader, compileClassPath.orElseGet(() -> null));
+                        writerSchema, readerSchema, classesDir, classLoader, compileClassPath.orElseGet(() -> null));
 
                 return generator.generateDeserializer();
             }
@@ -303,21 +327,20 @@ public final class FastSerdeCache {
         return d -> new SpecificDatumReader<>(writerSchema, readerSchema).read(null, d);
     }
 
-    @SuppressWarnings("unchecked")
     private FastDeserializer<?> buildGenericDeserializer(Schema writerSchema, Schema readerSchema) {
         try {
             String className = FastDeserializerGeneratorBase.getClassName(writerSchema, readerSchema,
-                "Generic");
+                    "Generic");
             Optional<Path> clazzFile = Files.walk(classesDir.toPath()).filter(p -> p.getFileName()
-                .startsWith(className + ".class")).findFirst();
+                    .startsWith(className + ".class")).findFirst();
             if (clazzFile.isPresent()) {
                 Class<FastDeserializer<?>> fastDeserializerClass = (Class<FastDeserializer<?>>) classLoader
-                    .loadClass(FastDeserializerGeneratorBase.GENERATED_PACKAGE_NAME + "." + className);
+                        .loadClass(FastDeserializerGeneratorBase.GENERATED_PACKAGE_NAME + "." + className);
 
                 return fastDeserializerClass.getConstructor(Schema.class).newInstance(readerSchema);
             } else {
                 FastGenericDeserializerGenerator<?> generator = new FastGenericDeserializerGenerator<>(
-                    writerSchema, readerSchema, classesDir, classLoader, compileClassPath.orElseGet(() -> null));
+                        writerSchema, readerSchema, classesDir, classLoader, compileClassPath.orElseGet(() -> null));
 
                 return generator.generateDeserializer();
             }
@@ -335,15 +358,15 @@ public final class FastSerdeCache {
         try {
             String className = FastSerializerGeneratorBase.getClassName(schema, "Specific");
             Optional<Path> clazzFile = Files.walk(classesDir.toPath()).filter(p -> p.getFileName()
-                .startsWith(className + ".class")).findFirst();
+                    .startsWith(className + ".class")).findFirst();
             if (clazzFile.isPresent()) {
                 Class<FastSerializer<?>> fastSerializerClass = (Class<FastSerializer<?>>) classLoader
-                    .loadClass(FastSerializerGeneratorBase.GENERATED_PACKAGE_NAME + "." + className);
+                        .loadClass(FastSerializerGeneratorBase.GENERATED_PACKAGE_NAME + "." + className);
 
                 return fastSerializerClass.newInstance();
             } else {
                 FastSpecificSerializerGenerator<?> generator = new FastSpecificSerializerGenerator<>(
-                    schema, classesDir, classLoader, compileClassPath.orElseGet(() -> null));
+                        schema, classesDir, classLoader, compileClassPath.orElseGet(() -> null));
 
                 return generator.generateSerializer();
             }
@@ -358,20 +381,19 @@ public final class FastSerdeCache {
         };
     }
 
-    @SuppressWarnings("unchecked")
     private FastSerializer<?> buildGenericSerializer(Schema schema) {
         try {
             String className = FastSerializerGeneratorBase.getClassName(schema, "Generic");
             Optional<Path> clazzFile = Files.walk(classesDir.toPath()).filter(p -> p.getFileName()
-                .startsWith(className + ".class")).findFirst();
+                    .startsWith(className + ".class")).findFirst();
             if (clazzFile.isPresent()) {
                 Class<FastSerializer<?>> fastSerializerClass = (Class<FastSerializer<?>>) classLoader
-                    .loadClass(FastSerializerGeneratorBase.GENERATED_PACKAGE_NAME + "." + className);
+                        .loadClass(FastSerializerGeneratorBase.GENERATED_PACKAGE_NAME + "." + className);
 
                 return fastSerializerClass.getConstructor(Schema.class).newInstance(schema);
             } else {
                 FastGenericSerializerGenerator<?> generator = new FastGenericSerializerGenerator<>(
-                    schema, classesDir, classLoader, compileClassPath.orElseGet(() -> null));
+                        schema, classesDir, classLoader, compileClassPath.orElseGet(() -> null));
 
                 return generator.generateSerializer();
             }
