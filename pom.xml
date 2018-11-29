@@ -4,7 +4,7 @@
 
     <groupId>com.rtbhouse</groupId>
     <artifactId>avro-fastserde</artifactId>
-    <version>1.0.2</version>
+    <version>1.0.3-SNAPSHOT</version>
     <packaging>jar</packaging>
 
     <name>avro-fastserde</name>
@@ -183,6 +183,13 @@
                     <excludes>
                         <exclude>**/generated/**/*.java</exclude>
                     </excludes>
+        			<annotationProcessorPaths>
+            			<path>
+                			<groupId>org.openjdk.jmh</groupId>
+                			<artifactId>jmh-generator-annprocess</artifactId>
+                			<version>${jmh.version}</version>
+            			</path>
+        			</annotationProcessorPaths>                    
                 </configuration>
             </plugin>
             <plugin>
@@ -287,6 +294,29 @@
                     </execution>
                 </executions>
             </plugin>
+			<plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-assembly-plugin</artifactId>
+                <configuration>
+                    <descriptors>
+                        <descriptor>src/main/assembly/benchmarks.xml</descriptor>
+                    </descriptors>
+                    <archive>
+                        <manifest>
+                            <mainClass>org.openjdk.jmh.Main</mainClass>
+                        </manifest>
+                    </archive>
+                </configuration>
+                <executions>
+                    <execution>
+                        <id>make-assembly</id>
+                        <phase>package</phase>
+                        <goals>
+                            <goal>single</goal>
+                        </goals>
+                    </execution>
+                </executions>
+            </plugin>            
         </plugins>
     </build>
 </project>

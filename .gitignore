@@ -3,6 +3,7 @@ target/
 test-output/
 .settings/
 *.iml
+*.swp
 .idea/
 .idea/*
 .project
