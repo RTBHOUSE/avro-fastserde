@@ -62,8 +62,8 @@ public class FastSpecificSerializerGeneratorTest {
         record.put("testFloatUnion", 1.0f);
         record.put("testBoolean", true);
         record.put("testBooleanUnion", true);
-        record.put("testBytes", ByteBuffer.wrap(new byte[]{ 0x01, 0x02 }));
-        record.put("testBytesUnion", ByteBuffer.wrap(new byte[]{ 0x01, 0x02 }));
+        record.put("testBytes", ByteBuffer.wrap(new byte[] { 0x01, 0x02 }));
+        record.put("testBytesUnion", ByteBuffer.wrap(new byte[] { 0x01, 0x02 }));
 
         // when
         record = decodeRecord(TestRecord.getClassSchema(), dataAsDecoder(record));
@@ -81,8 +81,8 @@ public class FastSpecificSerializerGeneratorTest {
         Assert.assertEquals(1.0f, record.get("testFloatUnion"));
         Assert.assertEquals(true, record.get("testBoolean"));
         Assert.assertEquals(true, record.get("testBooleanUnion"));
-        Assert.assertEquals(ByteBuffer.wrap(new byte[]{0x01, 0x02}), record.get("testBytes"));
-        Assert.assertEquals(ByteBuffer.wrap(new byte[]{0x01, 0x02}), record.get("testBytesUnion"));
+        Assert.assertEquals(ByteBuffer.wrap(new byte[] { 0x01, 0x02 }), record.get("testBytes"));
+        Assert.assertEquals(ByteBuffer.wrap(new byte[] { 0x01, 0x02 }), record.get("testBytesUnion"));
 
     }
 
@@ -91,19 +91,19 @@ public class FastSpecificSerializerGeneratorTest {
         // given
         TestRecord record = emptyTestRecord();
 
-        record.put("testFixed", new TestFixed(new byte[]{0x01}));
-        record.put("testFixedUnion", new TestFixed(new byte[]{0x02}));
-        record.put("testFixedArray", Arrays.asList(new TestFixed(new byte[]{0x03})));
-        record.put("testFixedUnionArray", Arrays.asList(new TestFixed(new byte[]{0x04})));
+        record.put("testFixed", new TestFixed(new byte[] { 0x01 }));
+        record.put("testFixedUnion", new TestFixed(new byte[] { 0x02 }));
+        record.put("testFixedArray", Arrays.asList(new TestFixed(new byte[] { 0x03 })));
+        record.put("testFixedUnionArray", Arrays.asList(new TestFixed(new byte[] { 0x04 })));
 
         // when
         record = decodeRecord(TestRecord.getClassSchema(), dataAsDecoder(record));
 
         // then
-        Assert.assertArrayEquals(new byte[]{ 0x01 }, record.getTestFixed().bytes());
-        Assert.assertArrayEquals(new byte[]{ 0x02 }, record.getTestFixedUnion().bytes());
-        Assert.assertArrayEquals(new byte[]{ 0x03 }, record.getTestFixedArray().get(0).bytes());
-        Assert.assertArrayEquals(new byte[]{ 0x04 }, record.getTestFixedUnionArray().get(0).bytes());
+        Assert.assertArrayEquals(new byte[] { 0x01 }, record.getTestFixed().bytes());
+        Assert.assertArrayEquals(new byte[] { 0x02 }, record.getTestFixedUnion().bytes());
+        Assert.assertArrayEquals(new byte[] { 0x03 }, record.getTestFixedArray().get(0).bytes());
+        Assert.assertArrayEquals(new byte[] { 0x04 }, record.getTestFixedUnionArray().get(0).bytes());
     }
 
     @Test
@@ -300,7 +300,7 @@ public class FastSpecificSerializerGeneratorTest {
         recordsMap.put("2", testRecord);
 
         // when
-        Map<String, TestRecord> map = decodeRecord(mapRecordSchema, dataAsDecoder(recordsMap, mapRecordSchema));
+        Map<Utf8, TestRecord> map = decodeRecord(mapRecordSchema, dataAsDecoder(recordsMap, mapRecordSchema));
 
         // then
         Assert.assertEquals(2, map.size());
@@ -325,6 +325,48 @@ public class FastSpecificSerializerGeneratorTest {
         Assert.assertEquals(2, map.size());
         Assert.assertEquals("abc", map.get(new Utf8("1")).get("testString"));
         Assert.assertEquals("abc", map.get(new Utf8("2")).get("testString"));
+    }
+
+    @Test
+    public void testNullElementMap() {
+        // given
+        Schema mapRecordSchema = Schema.createMap(Schema.createUnion(
+                Schema.create(Schema.Type.STRING), Schema.create(Schema.Type.NULL), Schema.create(Schema.Type.INT)));
+
+        Map<String, Object> records = new HashMap<>();
+        records.put("0", "0");
+        records.put("1", null);
+        records.put("2", 2);
+
+        // when
+        Map<Utf8, Object> map = decodeRecord(mapRecordSchema, dataAsDecoder(records, mapRecordSchema));
+
+        // then
+        Assert.assertEquals(3, map.size());
+        Assert.assertEquals(new Utf8("0"), map.get(new Utf8("0")));
+        Assert.assertNull(map.get(new Utf8("1")));
+        Assert.assertEquals(2, map.get(new Utf8("2")));
+    }
+
+    @Test
+    public void testNullElementArray() {
+        // given
+        Schema arrayRecordSchema = Schema.createArray(Schema.createUnion(
+                Schema.create(Schema.Type.STRING), Schema.create(Schema.Type.NULL), Schema.create(Schema.Type.INT)));
+
+        List<Object> records = new ArrayList<>();
+        records.add("0");
+        records.add(null);
+        records.add(2);
+
+        // when
+        List<Object> array = decodeRecord(arrayRecordSchema, dataAsDecoder(records, arrayRecordSchema));
+
+        // then
+        Assert.assertEquals(3, array.size());
+        Assert.assertEquals(new Utf8("0"), array.get(0));
+        Assert.assertNull(array.get(1));
+        Assert.assertEquals(2, array.get(2));
     }
 
     public <T extends GenericContainer> Decoder dataAsDecoder(T data) {
@@ -363,9 +405,9 @@ public class FastSpecificSerializerGeneratorTest {
     public static TestRecord emptyTestRecord() {
         TestRecord record = new TestRecord();
 
-        record.put("testFixed", new TestFixed(new byte[]{0x01}));
+        record.put("testFixed", new TestFixed(new byte[] { 0x01 }));
         record.put("testFixedArray", Collections.EMPTY_LIST);
-        record.put("testFixedUnionArray", Arrays.asList(new TestFixed(new byte[]{0x01})));
+        record.put("testFixedUnionArray", Arrays.asList(new TestFixed(new byte[] { 0x01 })));
 
         record.put("testEnum", TestEnum.A);
         record.put("testEnumArray", Collections.EMPTY_LIST);
@@ -383,7 +425,7 @@ public class FastSpecificSerializerGeneratorTest {
         record.put("testFloat", 1.0f);
         record.put("testBoolean", true);
         record.put("testString", "aaa");
-        record.put("testBytes", ByteBuffer.wrap(new byte[]{0x01, 0x02}));
+        record.put("testBytes", ByteBuffer.wrap(new byte[] { 0x01, 0x02 }));
 
         return record;
     }
