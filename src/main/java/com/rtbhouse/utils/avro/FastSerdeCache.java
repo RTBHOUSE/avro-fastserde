@@ -35,6 +35,8 @@ public final class FastSerdeCache {
     public static final String GENERATED_CLASSES_DIR = "avro.fast.serde.classes.dir";
     public static final String CLASSPATH = "avro.fast.serde.classpath";
     public static final String CLASSPATH_SUPPLIER = "avro.fast.serde.classpath.supplier";
+    public static final String COMPILE_THREADS_NUM = "avro.fast.serde.compile.threads";
+    public static final int COMPILE_THREADS_NUM_DEFAULT = 2;
 
     private static final Logger LOGGER = Logger.getLogger(FastSerdeCache.class.getName());
 
@@ -410,7 +412,9 @@ public final class FastSerdeCache {
     }
 
     private Executor getDefaultExecutor() {
-        return Executors.newFixedThreadPool(2, new ThreadFactory() {
+        final int threads = Integer.parseUnsignedInt(System.getProperty(COMPILE_THREADS_NUM,
+                String.valueOf(COMPILE_THREADS_NUM_DEFAULT)));
+        return Executors.newFixedThreadPool(threads, new ThreadFactory() {
             private final AtomicInteger threadNumber = new AtomicInteger(1);
 
             @Override
