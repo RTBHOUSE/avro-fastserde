@@ -29,7 +29,7 @@ public class FastDatumWriterTest {
 
     @Test
     @SuppressWarnings("unchecked")
-    public void shouldCreateSpecificDatumWriter() throws IOException, InterruptedException {
+    public void shouldCreateSpecificDatumWriter() throws IOException {
         // given
         FastSpecificDatumWriter<TestRecord> fastSpecificDatumWriter = new FastSpecificDatumWriter<>(
                 TestRecord.getClassSchema(), cache);
@@ -54,7 +54,7 @@ public class FastDatumWriterTest {
 
     @Test
     @SuppressWarnings("unchecked")
-    public void shouldCreateGenericDatumReader() throws IOException, InterruptedException {
+    public void shouldCreateGenericDatumReader() throws IOException {
         Schema recordSchema = createRecord("TestSchema",
                 createPrimitiveUnionFieldSchema("test", Schema.Type.STRING));
         FastGenericDatumWriter<GenericRecord> fastGenericDatumReader = new FastGenericDatumWriter<>(

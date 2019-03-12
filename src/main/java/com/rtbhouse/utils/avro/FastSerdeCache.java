@@ -16,14 +16,14 @@ import java.util.concurrent.Executors;
 import java.util.concurrent.ThreadFactory;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.Supplier;
-import java.util.logging.Level;
-import java.util.logging.Logger;
 
 import org.apache.avro.Schema;
 import org.apache.avro.generic.GenericDatumReader;
 import org.apache.avro.generic.GenericDatumWriter;
 import org.apache.avro.specific.SpecificDatumReader;
 import org.apache.avro.specific.SpecificDatumWriter;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 /**
  * Fast avro serializer/deserializer cache. Stores generated and already compiled instances of serializers and
@@ -38,7 +38,7 @@ public final class FastSerdeCache {
     public static final String COMPILE_THREADS_NUM = "avro.fast.serde.compile.threads";
     public static final int COMPILE_THREADS_NUM_DEFAULT = 2;
 
-    private static final Logger LOGGER = Logger.getLogger(FastSerdeCache.class.getName());
+    private static final Logger LOGGER = LoggerFactory.getLogger(FastSerdeCache.class.getName());
 
     private static volatile FastSerdeCache INSTANCE;
 
@@ -166,13 +166,11 @@ public final class FastSerdeCache {
 
                                 classpathSupplier = (Supplier<String>) classPathSupplierClass.newInstance();
                             } else {
-                                LOGGER.log(Level.WARNING,
-                                        "classpath supplier must be subtype of java.util.function.Supplier: "
+                                LOGGER.warn("classpath supplier must be subtype of java.util.function.Supplier: "
                                                 + classpathSupplierClassName);
                             }
                         } catch (ReflectiveOperationException e) {
-                            LOGGER.log(Level.WARNING,
-                                    "unable to instantiate classpath supplier: " + classpathSupplierClassName, e);
+                            LOGGER.warn("unable to instantiate classpath supplier: " + classpathSupplierClassName, e);
                         }
                         INSTANCE = new FastSerdeCache(classpathSupplier);
                     } else if (classPath != null) {
@@ -321,9 +319,9 @@ public final class FastSerdeCache {
                 return generator.generateDeserializer();
             }
         } catch (FastDeserializerGeneratorException e) {
-            LOGGER.log(Level.WARNING, "deserializer generation exception", e);
+            LOGGER.warn("deserializer generation exception", e);
         } catch (Exception e) {
-            LOGGER.log(Level.WARNING, "deserializer class instantiation exception", e);
+            LOGGER.warn("deserializer class instantiation exception", e);
         }
 
         return d -> new SpecificDatumReader<>(writerSchema, readerSchema).read(null, d);
@@ -348,9 +346,9 @@ public final class FastSerdeCache {
             }
 
         } catch (FastDeserializerGeneratorException e) {
-            LOGGER.log(Level.WARNING, "deserializer generation exception", e);
+            LOGGER.warn("deserializer generation exception", e);
         } catch (Exception e) {
-            LOGGER.log(Level.WARNING, "deserializer class instantiation exception", e);
+            LOGGER.warn("deserializer class instantiation exception", e);
         }
 
         return d -> new GenericDatumReader<>(writerSchema, readerSchema).read(null, d);
@@ -373,9 +371,9 @@ public final class FastSerdeCache {
                 return generator.generateSerializer();
             }
         } catch (FastDeserializerGeneratorException e) {
-            LOGGER.log(Level.WARNING, "serializer generation exception", e);
+            LOGGER.warn("serializer generation exception", e);
         } catch (Exception e) {
-            LOGGER.log(Level.WARNING, "serializer class instantiation exception", e);
+            LOGGER.warn("serializer class instantiation exception", e);
         }
 
         return (d, e) -> {
@@ -401,9 +399,9 @@ public final class FastSerdeCache {
             }
 
         } catch (FastDeserializerGeneratorException e) {
-            LOGGER.log(Level.WARNING, "serializer generation exception", e);
+            LOGGER.warn("serializer generation exception", e);
         } catch (Exception e) {
-            LOGGER.log(Level.WARNING, "serializer class instantiation exception", e);
+            LOGGER.warn("serializer class instantiation exception", e);
         }
 
         return (d, e) -> {

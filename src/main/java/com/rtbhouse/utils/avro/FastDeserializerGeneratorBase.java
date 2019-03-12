@@ -1,21 +1,5 @@
 package com.rtbhouse.utils.avro;
 
-import java.io.File;
-import java.io.IOException;
-import java.lang.reflect.Field;
-import java.util.Collections;
-import java.util.ListIterator;
-import java.util.Map;
-import java.util.concurrent.ConcurrentHashMap;
-import java.util.concurrent.ThreadLocalRandom;
-
-import javax.tools.JavaCompiler;
-import javax.tools.ToolProvider;
-
-import org.apache.avro.Schema;
-import org.apache.avro.SchemaNormalization;
-import org.apache.avro.io.parsing.Symbol;
-
 import com.google.common.base.Charsets;
 import com.google.common.collect.Lists;
 import com.google.common.hash.HashFunction;
@@ -23,8 +7,28 @@ import com.google.common.hash.Hashing;
 import com.sun.codemodel.JBlock;
 import com.sun.codemodel.JCodeModel;
 import com.sun.codemodel.JDefinedClass;
+import org.apache.avro.Schema;
+import org.apache.avro.SchemaNormalization;
+import org.apache.avro.io.parsing.Symbol;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
+import javax.tools.JavaCompiler;
+import javax.tools.ToolProvider;
+import java.io.File;
+import java.io.IOException;
+import java.io.OutputStream;
+import java.io.PrintStream;
+import java.lang.reflect.Field;
+import java.util.Collections;
+import java.util.ListIterator;
+import java.util.Map;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.ThreadLocalRandom;
 
 public abstract class FastDeserializerGeneratorBase<T> {
+
+    private static final Logger LOGGER = LoggerFactory.getLogger(FastDeserializerGeneratorBase.class);
 
     public static final String GENERATED_PACKAGE_NAME = "com.rtbhouse.utils.avro.deserialization.generated";
     public static final String GENERATED_SOURCES_PATH = "/com/rtbhouse/utils/avro/deserialization/generated/";
@@ -38,7 +42,7 @@ public abstract class FastDeserializerGeneratorBase<T> {
     private String compileClassPath;
 
     FastDeserializerGeneratorBase(Schema writer, Schema reader, File destination, ClassLoader classLoader,
-            String compileClassPath) {
+                                  String compileClassPath) {
         this.writer = writer;
         this.reader = reader;
         this.destination = destination;
@@ -52,22 +56,35 @@ public abstract class FastDeserializerGeneratorBase<T> {
     @SuppressWarnings("unchecked")
     protected Class<FastDeserializer<T>> compileClass(final String className) throws IOException,
             ClassNotFoundException {
-        codeModel.build(destination);
+        final OutputStream infoLoggingStream = LoggingOutputStream.infoLoggingStream(LOGGER);
+        final OutputStream errorLoggingStream = LoggingOutputStream.errorLoggingStream(LOGGER);
+        codeModel.build(destination, new PrintStream(infoLoggingStream));
 
         JavaCompiler compiler = ToolProvider.getSystemJavaCompiler();
+        if (compiler == null) {
+            throw new FastDeserializerGeneratorException("no system java compiler is available");
+        }
+
         int compileResult;
         if (compileClassPath != null) {
-            compileResult = compiler.run(null, null, null,
-                    "-cp", compileClassPath,
-                    destination.getAbsolutePath() + GENERATED_SOURCES_PATH + className + ".java");
+            compileResult = compiler.run(
+                    null,
+                    infoLoggingStream,
+                    errorLoggingStream,
+                    "-cp",
+                    compileClassPath,
+                    destination.getAbsolutePath() + GENERATED_SOURCES_PATH + className + ".java"
+            );
         } else {
-            compileResult = compiler.run(null, null, null, destination.getAbsolutePath()
-                    + GENERATED_SOURCES_PATH
-                    + className + ".java");
+            compileResult = compiler.run(
+                    null,
+                    infoLoggingStream,
+                    errorLoggingStream,
+                    destination.getAbsolutePath() + GENERATED_SOURCES_PATH + className + ".java");
         }
 
         if (compileResult != 0) {
-            throw new FastDeserializerGeneratorException("unable to compile:" + className);
+            throw new FastDeserializerGeneratorException("unable to compile: " + className);
         }
 
         return (Class<FastDeserializer<T>>) classLoader.loadClass(GENERATED_PACKAGE_NAME + "."

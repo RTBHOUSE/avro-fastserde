@@ -2,6 +2,8 @@ package com.rtbhouse.utils.avro;
 
 import java.io.File;
 import java.io.IOException;
+import java.io.OutputStream;
+import java.io.PrintStream;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ThreadLocalRandom;
@@ -18,8 +20,12 @@ import com.google.common.hash.Hashing;
 import com.sun.codemodel.JCodeModel;
 import com.sun.codemodel.JDefinedClass;
 import org.apache.commons.lang3.StringUtils;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 public abstract class FastSerializerGeneratorBase<T> {
+
+    private static final Logger LOGGER = LoggerFactory.getLogger(FastSerializerGenerator.class);
 
     public static final String GENERATED_PACKAGE_NAME = "com.rtbhouse.utils.avro.serialization.generated";
     public static final String GENERATED_SOURCES_PATH = "/com/rtbhouse/utils/avro/serialization/generated/";
@@ -32,7 +38,7 @@ public abstract class FastSerializerGeneratorBase<T> {
     private String compileClassPath;
 
     FastSerializerGeneratorBase(Schema schema, File destination, ClassLoader classLoader,
-            String compileClassPath) {
+                                String compileClassPath) {
         this.schema = schema;
         this.destination = destination;
         this.classLoader = classLoader;
@@ -45,23 +51,35 @@ public abstract class FastSerializerGeneratorBase<T> {
     @SuppressWarnings("unchecked")
     protected Class<FastSerializer<T>> compileClass(final String className) throws IOException,
             ClassNotFoundException {
-        codeModel.build(destination);
+        final OutputStream infoLoggingStream = LoggingOutputStream.infoLoggingStream(LOGGER);
+        final OutputStream errorLoggingStream = LoggingOutputStream.errorLoggingStream(LOGGER);
+        codeModel.build(destination, new PrintStream(infoLoggingStream));
 
         JavaCompiler compiler = ToolProvider.getSystemJavaCompiler();
+        if (compiler == null) {
+            throw new FastSerializerGeneratorException("no system java compiler is available");
+        }
+
         int compileResult;
         if (compileClassPath != null) {
-            compileResult = compiler.run(null, null, null,
-                    "-cp", compileClassPath,
+            compileResult = compiler.run(
+                    null,
+                    infoLoggingStream,
+                    errorLoggingStream,
+                    "-cp",
+                    compileClassPath,
                     destination.getAbsolutePath() + GENERATED_SOURCES_PATH + className + ".java"
-                    );
+            );
         } else {
-            compileResult = compiler.run(null, null, null, destination.getAbsolutePath()
-                    + GENERATED_SOURCES_PATH
-                    + className + ".java");
+            compileResult = compiler.run(
+                    null,
+                    infoLoggingStream,
+                    errorLoggingStream,
+                    destination.getAbsolutePath() + GENERATED_SOURCES_PATH + className + ".java");
         }
 
         if (compileResult != 0) {
-            throw new FastSerializerGeneratorException("unable to compile:" + className);
+            throw new FastSerializerGeneratorException("unable to compile: " + className);
         }
 
         return (Class<FastSerializer<T>>) classLoader.loadClass(GENERATED_PACKAGE_NAME + "."
@@ -69,7 +87,7 @@ public abstract class FastSerializerGeneratorBase<T> {
     }
 
     public static String getClassName(Schema schema, String description) {
-        Integer schemaId = Math.abs(getSchemaId(schema));
+        final Integer schemaId = Math.abs(getSchemaId(schema));
         if (Schema.Type.RECORD.equals(schema.getType())) {
             return schema.getName() + description + "Serializer"
                     + "_" + schemaId;
