@@ -30,7 +30,7 @@ public class FastDatumReaderTest {
 
     @Test
     @SuppressWarnings("unchecked")
-    public void shouldCreateSpecificDatumReader() throws IOException, InterruptedException {
+    public void shouldCreateSpecificDatumReader() throws IOException {
         // given
         FastSpecificDatumReader<TestRecord> fastSpecificDatumReader = new FastSpecificDatumReader<>(
                 TestRecord.getClassSchema(), cache);
@@ -60,7 +60,7 @@ public class FastDatumReaderTest {
 
     @Test
     @SuppressWarnings("unchecked")
-    public void shouldNotCreateSpecificDatumReader() throws IOException, InterruptedException {
+    public void shouldNotCreateSpecificDatumReader() throws IOException {
         // given
         Schema faultySchema = createRecord("FaultySchema");
         FastSpecificDatumReader<TestRecord> fastSpecificDatumReader = new FastSpecificDatumReader<>(

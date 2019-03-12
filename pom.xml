@@ -65,8 +65,9 @@
         <maven.gpg.plugin.version>1.5</maven.gpg.plugin.version>
         <build.helper.maven.plugin.version>1.12</build.helper.maven.plugin.version>
         <maven.clean.plugin.version>3.0.0</maven.clean.plugin.version>
-        <jmh.version>1.18</jmh.version>
+        <jmh.version>1.21</jmh.version>
         <junit.version>4.11</junit.version>
+        <slf4j-api.version>1.7.26</slf4j-api.version>
         <guava.version>19.0</guava.version>
         <apache.commons-lang3.version>3.4</apache.commons-lang3.version>
         <code.model.version>2.6</code.model.version>
@@ -145,6 +146,19 @@
             <artifactId>jmh-generator-annprocess</artifactId>
             <version>${jmh.version}</version>
             <scope>test</scope>
+        </dependency>
+
+        <dependency>
+            <groupId>org.slf4j</groupId>
+            <artifactId>slf4j-simple</artifactId>
+            <version>${slf4j-api.version}</version>
+            <scope>test</scope>
+        </dependency>
+
+        <dependency>
+            <groupId>org.slf4j</groupId>
+            <artifactId>slf4j-api</artifactId>
+            <version>${slf4j-api.version}</version>
         </dependency>
 
         <dependency>
