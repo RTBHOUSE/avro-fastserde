@@ -1,13 +1,16 @@
 package com.rtbhouse.utils.avro;
 
 import java.io.ByteArrayOutputStream;
+import java.nio.ByteBuffer;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Collections;
 import java.util.List;
 import java.util.stream.Collectors;
 
 import org.apache.avro.Schema;
 import org.apache.avro.generic.GenericContainer;
+import org.apache.avro.generic.GenericDatumReader;
 import org.apache.avro.generic.GenericDatumWriter;
 import org.apache.avro.io.BinaryEncoder;
 import org.apache.avro.io.Decoder;
@@ -90,11 +93,11 @@ public final class FastSerdeTestsSupport {
         return field;
     }
 
-    public static <T extends GenericContainer> Decoder genericDataAsDecoder(T data) {
-        return genericDataAsDecoder(data, data.getSchema());
+    public static <T extends GenericContainer> Decoder serializeGeneric(T data) {
+        return serializeGeneric(data, data.getSchema());
     }
 
-    public static <T> Decoder genericDataAsDecoder(T data, Schema schema) {
+    public static <T> Decoder serializeGeneric(T data, Schema schema) {
         ByteArrayOutputStream baos = new ByteArrayOutputStream();
         BinaryEncoder binaryEncoder = EncoderFactory.get().directBinaryEncoder(baos, null);
 
@@ -110,11 +113,20 @@ public final class FastSerdeTestsSupport {
         return DecoderFactory.get().binaryDecoder(baos.toByteArray(), null);
     }
 
-    public static <T extends SpecificRecord> Decoder specificDataAsDecoder(T record) {
-        return specificDataAsDecoder(record, record.getSchema());
+    public static <T> T deserializeGeneric(Schema schema, Decoder decoder) {
+        GenericDatumReader<T> datumReader = new GenericDatumReader<>(schema);
+        try {
+            return datumReader.read(null, decoder);
+        } catch (Exception e) {
+            throw new RuntimeException(e);
+        }
     }
 
-    public static <T> Decoder specificDataAsDecoder(T record, Schema schema) {
+    public static <T extends SpecificRecord> Decoder serializeSpecific(T record) {
+        return serializeSpecific(record, record.getSchema());
+    }
+
+    public static <T> Decoder serializeSpecific(T record, Schema schema) {
         ByteArrayOutputStream baos = new ByteArrayOutputStream();
         BinaryEncoder binaryEncoder = EncoderFactory.get().directBinaryEncoder(baos, null);
 
@@ -131,7 +143,7 @@ public final class FastSerdeTestsSupport {
     }
 
 
-    public static <T> T specificDataFromDecoder(Schema writerSchema, Decoder decoder) {
+    public static <T> T deserializeSpecific(Schema writerSchema, Decoder decoder) {
         SpecificDatumReader<T> datumReader = new SpecificDatumReader<>(writerSchema);
         try {
             return datumReader.read(null, decoder);
@@ -141,4 +153,31 @@ public final class FastSerdeTestsSupport {
 
     }
 
+    public static com.rtbhouse.utils.generated.avro.TestRecord emptyTestRecord() {
+        com.rtbhouse.utils.generated.avro.TestRecord record = new com.rtbhouse.utils.generated.avro.TestRecord();
+
+        record.put("testFixed", new com.rtbhouse.utils.generated.avro.TestFixed(new byte[] { 0x01 }));
+        record.put("testFixedArray", Collections.EMPTY_LIST);
+        record.put("testFixedUnionArray", Arrays.asList(new com.rtbhouse.utils.generated.avro.TestFixed(new byte[] { 0x01 })));
+
+        record.put("testEnum", com.rtbhouse.utils.generated.avro.TestEnum.A);
+        record.put("testEnumArray", Collections.EMPTY_LIST);
+        record.put("testEnumUnionArray", Arrays.asList(com.rtbhouse.utils.generated.avro.TestEnum.A));
+        record.put("subRecord", new com.rtbhouse.utils.generated.avro.SubRecord());
+
+        record.put("recordsArray", Collections.emptyList());
+        record.put("recordsArrayMap", Collections.emptyList());
+        record.put("recordsMap", Collections.emptyMap());
+        record.put("recordsMapArray", Collections.emptyMap());
+
+        record.put("testInt", 1);
+        record.put("testLong", 1l);
+        record.put("testDouble", 1.0);
+        record.put("testFloat", 1.0f);
+        record.put("testBoolean", true);
+        record.put("testString", "aaa");
+        record.put("testBytes", ByteBuffer.wrap(new byte[] { 0x01, 0x02 }));
+
+        return record;
+    }
 }

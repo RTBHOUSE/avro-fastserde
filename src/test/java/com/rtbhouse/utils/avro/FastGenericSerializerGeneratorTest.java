@@ -9,6 +9,7 @@ import static com.rtbhouse.utils.avro.FastSerdeTestsSupport.createPrimitiveUnion
 import static com.rtbhouse.utils.avro.FastSerdeTestsSupport.createRecord;
 import static com.rtbhouse.utils.avro.FastSerdeTestsSupport.createUnionField;
 import static com.rtbhouse.utils.avro.FastSerdeTestsSupport.createUnionSchema;
+import static com.rtbhouse.utils.avro.FastSerdeTestsSupport.deserializeGeneric;
 
 import java.io.ByteArrayOutputStream;
 import java.io.File;
@@ -26,7 +27,6 @@ import java.util.Map;
 import org.apache.avro.Schema;
 import org.apache.avro.generic.GenericContainer;
 import org.apache.avro.generic.GenericData;
-import org.apache.avro.generic.GenericDatumReader;
 import org.apache.avro.generic.GenericRecord;
 import org.apache.avro.generic.GenericRecordBuilder;
 import org.apache.avro.io.BinaryEncoder;
@@ -48,28 +48,28 @@ public class FastGenericSerializerGeneratorTest {
         Path tempPath = Files.createTempDirectory("generated");
         tempDir = tempPath.toFile();
 
-        classLoader = URLClassLoader.newInstance(new URL[]{ tempDir.toURI().toURL() },
-            FastGenericSerializerGeneratorTest.class.getClassLoader());
+        classLoader = URLClassLoader.newInstance(new URL[] { tempDir.toURI().toURL() },
+                FastGenericSerializerGeneratorTest.class.getClassLoader());
     }
 
     @Test
     public void shouldWritePrimitives() {
         // given
         Schema recordSchema = createRecord("testRecord",
-            createField("testInt", Schema.create(Schema.Type.INT)),
-            createPrimitiveUnionFieldSchema("testIntUnion", Schema.Type.INT),
-            createField("testString", Schema.create(Schema.Type.STRING)),
-            createPrimitiveUnionFieldSchema("testStringUnion", Schema.Type.STRING),
-            createField("testLong", Schema.create(Schema.Type.LONG)),
-            createPrimitiveUnionFieldSchema("testLongUnion", Schema.Type.LONG),
-            createField("testDouble", Schema.create(Schema.Type.DOUBLE)),
-            createPrimitiveUnionFieldSchema("testDoubleUnion", Schema.Type.DOUBLE),
-            createField("testFloat", Schema.create(Schema.Type.FLOAT)),
-            createPrimitiveUnionFieldSchema("testFloatUnion", Schema.Type.FLOAT),
-            createField("testBoolean", Schema.create(Schema.Type.BOOLEAN)),
-            createPrimitiveUnionFieldSchema("testBooleanUnion", Schema.Type.BOOLEAN),
-            createField("testBytes", Schema.create(Schema.Type.BYTES)),
-            createPrimitiveUnionFieldSchema("testBytesUnion", Schema.Type.BYTES));
+                createField("testInt", Schema.create(Schema.Type.INT)),
+                createPrimitiveUnionFieldSchema("testIntUnion", Schema.Type.INT),
+                createField("testString", Schema.create(Schema.Type.STRING)),
+                createPrimitiveUnionFieldSchema("testStringUnion", Schema.Type.STRING),
+                createField("testLong", Schema.create(Schema.Type.LONG)),
+                createPrimitiveUnionFieldSchema("testLongUnion", Schema.Type.LONG),
+                createField("testDouble", Schema.create(Schema.Type.DOUBLE)),
+                createPrimitiveUnionFieldSchema("testDoubleUnion", Schema.Type.DOUBLE),
+                createField("testFloat", Schema.create(Schema.Type.FLOAT)),
+                createPrimitiveUnionFieldSchema("testFloatUnion", Schema.Type.FLOAT),
+                createField("testBoolean", Schema.create(Schema.Type.BOOLEAN)),
+                createPrimitiveUnionFieldSchema("testBooleanUnion", Schema.Type.BOOLEAN),
+                createField("testBytes", Schema.create(Schema.Type.BYTES)),
+                createPrimitiveUnionFieldSchema("testBytesUnion", Schema.Type.BYTES));
 
         GenericRecordBuilder builder = new GenericRecordBuilder(recordSchema);
         builder.set("testInt", 1);
@@ -84,11 +84,11 @@ public class FastGenericSerializerGeneratorTest {
         builder.set("testFloatUnion", 1.0f);
         builder.set("testBoolean", true);
         builder.set("testBooleanUnion", true);
-        builder.set("testBytes", ByteBuffer.wrap(new byte[]{ 0x01, 0x02 }));
-        builder.set("testBytesUnion", ByteBuffer.wrap(new byte[]{0x01, 0x02}));
+        builder.set("testBytes", ByteBuffer.wrap(new byte[] { 0x01, 0x02 }));
+        builder.set("testBytesUnion", ByteBuffer.wrap(new byte[] { 0x01, 0x02 }));
 
         // when
-        GenericRecord record = decodeRecord(recordSchema, dataAsBinaryDecoder(builder.build()));
+        GenericRecord record = deserializeGeneric(recordSchema, serializeGenericFast(builder.build()));
 
         // then
         Assert.assertEquals(1, record.get("testInt"));
@@ -103,8 +103,8 @@ public class FastGenericSerializerGeneratorTest {
         Assert.assertEquals(1.0f, record.get("testFloatUnion"));
         Assert.assertEquals(true, record.get("testBoolean"));
         Assert.assertEquals(true, record.get("testBooleanUnion"));
-        Assert.assertEquals(ByteBuffer.wrap(new byte[]{0x01, 0x02}), record.get("testBytes"));
-        Assert.assertEquals(ByteBuffer.wrap(new byte[]{0x01, 0x02}), record.get("testBytesUnion"));
+        Assert.assertEquals(ByteBuffer.wrap(new byte[] { 0x01, 0x02 }), record.get("testBytes"));
+        Assert.assertEquals(ByteBuffer.wrap(new byte[] { 0x01, 0x02 }), record.get("testBytesUnion"));
 
     }
 
@@ -113,23 +113,26 @@ public class FastGenericSerializerGeneratorTest {
         // given
         Schema fixedSchema = createFixedSchema("testFixed", 2);
         Schema recordSchema = createRecord("testRecord", createField("testFixed", fixedSchema),
-            createUnionField("testFixedUnion", fixedSchema), createArrayFieldSchema("testFixedArray", fixedSchema),
-            createArrayFieldSchema("testFixedUnionArray", createUnionSchema(fixedSchema)));
+                createUnionField("testFixedUnion", fixedSchema), createArrayFieldSchema("testFixedArray", fixedSchema),
+                createArrayFieldSchema("testFixedUnionArray", createUnionSchema(fixedSchema)));
 
         GenericRecordBuilder builder = new GenericRecordBuilder(recordSchema);
-        builder.set("testFixed", new GenericData.Fixed(fixedSchema, new byte[]{0x01, 0x02}));
-        builder.set("testFixedUnion", new GenericData.Fixed(fixedSchema, new byte[]{0x03, 0x04}));
-        builder.set("testFixedArray", Arrays.asList(new GenericData.Fixed(fixedSchema, new byte[]{0x05, 0x06})));
-        builder.set("testFixedUnionArray", Arrays.asList(new GenericData.Fixed(fixedSchema, new byte[]{0x07, 0x08})));
+        builder.set("testFixed", new GenericData.Fixed(fixedSchema, new byte[] { 0x01, 0x02 }));
+        builder.set("testFixedUnion", new GenericData.Fixed(fixedSchema, new byte[] { 0x03, 0x04 }));
+        builder.set("testFixedArray", Arrays.asList(new GenericData.Fixed(fixedSchema, new byte[] { 0x05, 0x06 })));
+        builder.set("testFixedUnionArray",
+                Arrays.asList(new GenericData.Fixed(fixedSchema, new byte[] { 0x07, 0x08 })));
 
         // when
-        GenericRecord record = decodeRecord(recordSchema, dataAsBinaryDecoder(builder.build()));
+        GenericRecord record = deserializeGeneric(recordSchema, serializeGenericFast(builder.build()));
 
         // then
-        Assert.assertArrayEquals(new byte[]{ 0x01, 0x02 }, ((GenericData.Fixed) record.get("testFixed")).bytes());
-        Assert.assertArrayEquals(new byte[]{ 0x03, 0x04 }, ((GenericData.Fixed) record.get("testFixedUnion")).bytes());
-        Assert.assertArrayEquals(new byte[]{ 0x05, 0x06 }, ((List<GenericData.Fixed>) record.get("testFixedArray")).get(0).bytes());
-        Assert.assertArrayEquals(new byte[]{ 0x07, 0x08 }, ((List<GenericData.Fixed>) record.get("testFixedUnionArray")).get(0).bytes());
+        Assert.assertArrayEquals(new byte[] { 0x01, 0x02 }, ((GenericData.Fixed) record.get("testFixed")).bytes());
+        Assert.assertArrayEquals(new byte[] { 0x03, 0x04 }, ((GenericData.Fixed) record.get("testFixedUnion")).bytes());
+        Assert.assertArrayEquals(new byte[] { 0x05, 0x06 },
+                ((List<GenericData.Fixed>) record.get("testFixedArray")).get(0).bytes());
+        Assert.assertArrayEquals(new byte[] { 0x07, 0x08 },
+                ((List<GenericData.Fixed>) record.get("testFixedUnionArray")).get(0).bytes());
     }
 
     @Test
@@ -147,7 +150,7 @@ public class FastGenericSerializerGeneratorTest {
         builder.set("testEnumUnionArray", Arrays.asList(new GenericData.EnumSymbol(enumSchema, "A")));
 
         // when
-        GenericRecord record = decodeRecord(recordSchema, dataAsBinaryDecoder(builder.build()));
+        GenericRecord record = deserializeGeneric(recordSchema, serializeGenericFast(builder.build()));
 
         // then
         Assert.assertEquals("A", record.get("testEnum").toString());
@@ -174,7 +177,7 @@ public class FastGenericSerializerGeneratorTest {
         builder.set("field", "abc");
 
         // when
-        GenericRecord record = decodeRecord(recordSchema, dataAsBinaryDecoder(builder.build()));
+        GenericRecord record = deserializeGeneric(recordSchema, serializeGenericFast(builder.build()));
 
         // then
         Assert.assertEquals("abc", ((GenericRecord) record.get("record")).get("subField").toString());
@@ -208,7 +211,7 @@ public class FastGenericSerializerGeneratorTest {
         builder.set("recordsMapUnion", recordsMap);
 
         // when
-        GenericRecord record = decodeRecord(recordSchema, dataAsBinaryDecoder(builder.build()));
+        GenericRecord record = deserializeGeneric(recordSchema, serializeGenericFast(builder.build()));
 
         // then
         Assert.assertEquals("abc",
@@ -216,24 +219,26 @@ public class FastGenericSerializerGeneratorTest {
         Assert.assertEquals("abc",
                 ((List<GenericData.Record>) record.get("recordsArrayUnion")).get(0).get("subField").toString());
         Assert.assertEquals("abc",
-                ((Map<String, GenericData.Record>) record.get("recordsMap")).get(new Utf8("1")).get("subField").toString());
+                ((Map<String, GenericData.Record>) record.get("recordsMap")).get(new Utf8("1")).get("subField")
+                        .toString());
         Assert.assertEquals("abc",
-                ((Map<String, GenericData.Record>) record.get("recordsMapUnion")).get(new Utf8("1")).get("subField").toString());
+                ((Map<String, GenericData.Record>) record.get("recordsMapUnion")).get(new Utf8("1")).get("subField")
+                        .toString());
     }
 
     @Test
     public void shouldWriteSubRecordComplexCollectionsField() {
         // given
         Schema subRecordSchema = createRecord("subRecord",
-            createPrimitiveUnionFieldSchema("subField", Schema.Type.STRING));
+                createPrimitiveUnionFieldSchema("subField", Schema.Type.STRING));
         Schema recordSchema = createRecord(
-            "test",
-            createArrayFieldSchema("recordsArrayMap", Schema.createMap(createUnionSchema(subRecordSchema))),
-            createMapFieldSchema("recordsMapArray", Schema.createArray(createUnionSchema(subRecordSchema))),
-            createUnionField("recordsArrayMapUnion",
-                Schema.createArray(Schema.createMap(createUnionSchema(subRecordSchema)))),
-            createUnionField("recordsMapArrayUnion",
-                Schema.createMap(Schema.createArray(createUnionSchema(subRecordSchema)))));
+                "test",
+                createArrayFieldSchema("recordsArrayMap", Schema.createMap(createUnionSchema(subRecordSchema))),
+                createMapFieldSchema("recordsMapArray", Schema.createArray(createUnionSchema(subRecordSchema))),
+                createUnionField("recordsArrayMapUnion",
+                        Schema.createArray(Schema.createMap(createUnionSchema(subRecordSchema)))),
+                createUnionField("recordsMapArrayUnion",
+                        Schema.createMap(Schema.createArray(createUnionSchema(subRecordSchema)))));
 
         GenericRecordBuilder subRecordBuilder = new GenericRecordBuilder(subRecordSchema);
         subRecordBuilder.set("subField", "abc");
@@ -256,29 +261,33 @@ public class FastGenericSerializerGeneratorTest {
         builder.set("recordsMapArrayUnion", recordsMapArray);
 
         // when
-        GenericRecord record = decodeRecord(recordSchema, dataAsBinaryDecoder(builder.build()));
+        GenericRecord record = deserializeGeneric(recordSchema, serializeGenericFast(builder.build()));
 
         // then
         Assert.assertEquals("abc",
-                ((List<Map<Utf8, GenericRecord>>) record.get("recordsArrayMap")).get(0).get(new Utf8("1")).get("subField").toString());
+                ((List<Map<Utf8, GenericRecord>>) record.get("recordsArrayMap")).get(0).get(new Utf8("1"))
+                        .get("subField").toString());
         Assert.assertEquals("abc",
-                ((Map<Utf8, List<GenericRecord>>) record.get("recordsMapArray")).get(new Utf8("1")).get(0).get("subField").toString());
+                ((Map<Utf8, List<GenericRecord>>) record.get("recordsMapArray")).get(new Utf8("1")).get(0)
+                        .get("subField").toString());
         Assert.assertEquals("abc",
-                ((List<Map<Utf8, GenericRecord>>) record.get("recordsArrayMapUnion")).get(0).get(new Utf8("1")).get("subField").toString());
+                ((List<Map<Utf8, GenericRecord>>) record.get("recordsArrayMapUnion")).get(0).get(new Utf8("1"))
+                        .get("subField").toString());
         Assert.assertEquals("abc",
-                ((Map<Utf8, List<GenericRecord>>) record.get("recordsMapArrayUnion")).get(new Utf8("1")).get(0).get("subField").toString());
+                ((Map<Utf8, List<GenericRecord>>) record.get("recordsMapArrayUnion")).get(new Utf8("1")).get(0)
+                        .get("subField").toString());
     }
 
     @Test
     public void shouldWriteMultipleChoiceUnion() {
         // given
         Schema subRecordSchema = createRecord("subRecord",
-            createPrimitiveUnionFieldSchema("subField", Schema.Type.STRING));
+                createPrimitiveUnionFieldSchema("subField", Schema.Type.STRING));
 
         Schema recordSchema = createRecord(
-            "test",
-            createUnionField("union", subRecordSchema, Schema.create(Schema.Type.STRING),
-                Schema.create(Schema.Type.INT)));
+                "test",
+                createUnionField("union", subRecordSchema, Schema.create(Schema.Type.STRING),
+                        Schema.create(Schema.Type.INT)));
 
         GenericRecordBuilder subRecordBuilder = new GenericRecordBuilder(subRecordSchema);
         subRecordBuilder.set("subField", "abc");
@@ -287,7 +296,7 @@ public class FastGenericSerializerGeneratorTest {
         builder.set("union", subRecordBuilder.build());
 
         // when
-        GenericRecord record = decodeRecord(recordSchema, dataAsBinaryDecoder(builder.build()));
+        GenericRecord record = deserializeGeneric(recordSchema, serializeGenericFast(builder.build()));
 
         // then
         Assert.assertEquals("abc", ((GenericData.Record) record.get("union")).get("subField").toString());
@@ -297,7 +306,7 @@ public class FastGenericSerializerGeneratorTest {
         builder.set("union", "abc");
 
         // when
-        record = decodeRecord(recordSchema, dataAsBinaryDecoder(builder.build()));
+        record = deserializeGeneric(recordSchema, serializeGenericFast(builder.build()));
 
         // then
         Assert.assertEquals("abc", record.get("union").toString());
@@ -307,7 +316,7 @@ public class FastGenericSerializerGeneratorTest {
         builder.set("union", 1);
 
         // when
-        record = decodeRecord(recordSchema, dataAsBinaryDecoder(builder.build()));
+        record = deserializeGeneric(recordSchema, serializeGenericFast(builder.build()));
 
         // then
         Assert.assertEquals(1, record.get("union"));
@@ -318,7 +327,7 @@ public class FastGenericSerializerGeneratorTest {
     public void shouldWriteArrayOfRecords() {
         // given
         Schema recordSchema = createRecord("record",
-            createPrimitiveUnionFieldSchema("field", Schema.Type.STRING));
+                createPrimitiveUnionFieldSchema("field", Schema.Type.STRING));
 
         Schema arrayRecordSchema = Schema.createArray(recordSchema);
 
@@ -330,8 +339,8 @@ public class FastGenericSerializerGeneratorTest {
         recordsArray.add(subRecordBuilder.build());
 
         // when
-        GenericData.Array<GenericRecord> array = decodeRecord(arrayRecordSchema,
-                dataAsBinaryDecoder(recordsArray));
+        GenericData.Array<GenericRecord> array = deserializeGeneric(arrayRecordSchema,
+                serializeGenericFast(recordsArray));
 
         // then
         Assert.assertEquals(2, array.size());
@@ -350,7 +359,7 @@ public class FastGenericSerializerGeneratorTest {
         recordsArray.add(subRecordBuilder.build());
 
         // when
-        array = decodeRecord(arrayRecordSchema, dataAsBinaryDecoder(recordsArray));
+        array = deserializeGeneric(arrayRecordSchema, serializeGenericFast(recordsArray));
 
         // then
         Assert.assertEquals(2, array.size());
@@ -362,7 +371,7 @@ public class FastGenericSerializerGeneratorTest {
     public void shouldWriteMapOfRecords() {
         // given
         Schema recordSchema = createRecord("record",
-            createPrimitiveUnionFieldSchema("field", Schema.Type.STRING));
+                createPrimitiveUnionFieldSchema("field", Schema.Type.STRING));
 
         Schema mapRecordSchema = Schema.createMap(recordSchema);
 
@@ -374,8 +383,8 @@ public class FastGenericSerializerGeneratorTest {
         recordsMap.put("2", subRecordBuilder.build());
 
         // when
-        Map<Utf8, GenericRecord> map = decodeRecord(mapRecordSchema,
-                dataAsBinaryDecoder(recordsMap, mapRecordSchema));
+        Map<Utf8, GenericRecord> map = deserializeGeneric(mapRecordSchema,
+                serializeGenericFast(recordsMap, mapRecordSchema));
 
         // then
         Assert.assertEquals(2, map.size());
@@ -393,7 +402,7 @@ public class FastGenericSerializerGeneratorTest {
         recordsMap.put("2", subRecordBuilder.build());
 
         // when
-        map = decodeRecord(mapRecordSchema, dataAsBinaryDecoder(recordsMap, mapRecordSchema));
+        map = deserializeGeneric(mapRecordSchema, serializeGenericFast(recordsMap, mapRecordSchema));
 
         // then
         Assert.assertEquals(2, map.size());
@@ -401,16 +410,59 @@ public class FastGenericSerializerGeneratorTest {
         Assert.assertEquals("abc", map.get(new Utf8("2")).get("field").toString());
     }
 
-    public <T extends GenericContainer> Decoder dataAsBinaryDecoder(T data) {
-        return dataAsBinaryDecoder(data, data.getSchema());
+    @Test
+    public void shouldSerializeNullElementInMap() {
+        // given
+        Schema mapRecordSchema = Schema.createMap(Schema.createUnion(
+                Schema.create(Schema.Type.STRING), Schema.create(Schema.Type.NULL), Schema.create(Schema.Type.INT)));
+
+        Map<String, Object> records = new HashMap<>();
+        records.put("0", "0");
+        records.put("1", null);
+        records.put("2", 2);
+
+        // when
+        Map<Utf8, Object> map = deserializeGeneric(mapRecordSchema, serializeGenericFast(records, mapRecordSchema));
+
+        // then
+        Assert.assertEquals(3, map.size());
+        Assert.assertEquals(new Utf8("0"), map.get(new Utf8("0")));
+        Assert.assertNull(map.get(new Utf8("1")));
+        Assert.assertEquals(2, map.get(new Utf8("2")));
     }
 
-    public <T> Decoder dataAsBinaryDecoder(T data, Schema schema) {
+    @Test
+    public void shouldSerializeNullElementInArray() {
+        // given
+        Schema arrayRecordSchema = Schema.createArray(Schema.createUnion(
+                Schema.create(Schema.Type.STRING), Schema.create(Schema.Type.NULL), Schema.create(Schema.Type.INT)));
+
+        List<Object> records = new ArrayList<>();
+        records.add("0");
+        records.add(null);
+        records.add(2);
+
+        // when
+        List<Object> array = deserializeGeneric(arrayRecordSchema, serializeGenericFast(records, arrayRecordSchema));
+
+        // then
+        Assert.assertEquals(3, array.size());
+        Assert.assertEquals(new Utf8("0"), array.get(0));
+        Assert.assertNull(array.get(1));
+        Assert.assertEquals(2, array.get(2));
+    }
+
+    private <T extends GenericContainer> Decoder serializeGenericFast(T data) {
+        return serializeGenericFast(data, data.getSchema());
+    }
+
+    private <T> Decoder serializeGenericFast(T data, Schema schema) {
         ByteArrayOutputStream baos = new ByteArrayOutputStream();
         BinaryEncoder binaryEncoder = EncoderFactory.get().directBinaryEncoder(baos, null);
 
         try {
-            FastGenericSerializerGenerator<T>  fastGenericSerializerGenerator = new FastGenericSerializerGenerator<>(schema, tempDir, classLoader, null);
+            FastGenericSerializerGenerator<T> fastGenericSerializerGenerator = new FastGenericSerializerGenerator<>(
+                    schema, tempDir, classLoader, null);
             FastSerializer<T> fastSerializer = fastGenericSerializerGenerator.generateSerializer();
             fastSerializer.serialize(data, binaryEncoder);
             binaryEncoder.flush();
@@ -422,12 +474,4 @@ public class FastGenericSerializerGeneratorTest {
         return DecoderFactory.get().binaryDecoder(baos.toByteArray(), null);
     }
 
-    public <T> T decodeRecord(Schema schema, Decoder decoder) {
-        GenericDatumReader<T> datumReader = new GenericDatumReader<>(schema);
-        try {
-            return datumReader.read(null, decoder);
-        } catch (Exception e) {
-            throw new RuntimeException(e);
-        }
-    }
 }

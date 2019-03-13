@@ -1,8 +1,9 @@
 package com.rtbhouse.utils.avro;
 
 import static com.rtbhouse.utils.avro.FastSerdeTestsSupport.createUnionSchema;
-import static com.rtbhouse.utils.avro.FastSerdeTestsSupport.genericDataAsDecoder;
-import static com.rtbhouse.utils.avro.FastSerdeTestsSupport.specificDataAsDecoder;
+import static com.rtbhouse.utils.avro.FastSerdeTestsSupport.emptyTestRecord;
+import static com.rtbhouse.utils.avro.FastSerdeTestsSupport.serializeGeneric;
+import static com.rtbhouse.utils.avro.FastSerdeTestsSupport.serializeSpecific;
 
 import java.io.File;
 import java.io.IOException;
@@ -63,7 +64,8 @@ public class FastSpecificDeserializerGeneratorTest {
         record.put("testBytesUnion", ByteBuffer.wrap(new byte[] { 0x01, 0x02 }));
 
         // when
-        record = decodeRecord(TestRecord.getClassSchema(), TestRecord.getClassSchema(), specificDataAsDecoder(record));
+        record = deserializeSpecificFast(TestRecord.getClassSchema(), TestRecord.getClassSchema(),
+                serializeSpecific(record));
 
         // then
         Assert.assertEquals(1, record.get("testInt"));
@@ -94,7 +96,8 @@ public class FastSpecificDeserializerGeneratorTest {
         record.put("testFixedUnionArray", Arrays.asList(new TestFixed(new byte[] { 0x04 })));
 
         // when
-        record = decodeRecord(TestRecord.getClassSchema(), TestRecord.getClassSchema(), specificDataAsDecoder(record));
+        record = deserializeSpecificFast(TestRecord.getClassSchema(), TestRecord.getClassSchema(),
+                serializeSpecific(record));
 
         // then
         Assert.assertArrayEquals(new byte[] { 0x01 }, record.getTestFixed().bytes());
@@ -114,7 +117,8 @@ public class FastSpecificDeserializerGeneratorTest {
         record.put("testEnumUnionArray", Arrays.asList(TestEnum.A));
 
         // when
-        record = decodeRecord(TestRecord.getClassSchema(), TestRecord.getClassSchema(), specificDataAsDecoder(record));
+        record = deserializeSpecificFast(TestRecord.getClassSchema(), TestRecord.getClassSchema(),
+                serializeSpecific(record));
 
         // then
         Assert.assertEquals(TestEnum.A, record.getTestEnum());
@@ -160,8 +164,8 @@ public class FastSpecificDeserializerGeneratorTest {
         oldRecord.put("recordsMapArray", Collections.emptyMap());
 
         // when
-        TestRecord record = decodeRecord(TestRecord.getClassSchema(), oldRecordSchema,
-                genericDataAsDecoder(oldRecord));
+        TestRecord record = deserializeSpecificFast(TestRecord.getClassSchema(), oldRecordSchema,
+                serializeGeneric(oldRecord));
 
         // then
         Assert.assertEquals(TestEnum.A, record.getTestEnum());
@@ -206,8 +210,8 @@ public class FastSpecificDeserializerGeneratorTest {
         oldRecord.put("recordsMapArray", Collections.emptyMap());
 
         // when
-        TestRecord record = decodeRecord(TestRecord.getClassSchema(), oldRecordSchema,
-                genericDataAsDecoder(oldRecord));
+        TestRecord record = deserializeSpecificFast(TestRecord.getClassSchema(), oldRecordSchema,
+                serializeGeneric(oldRecord));
     }
 
     @Test
@@ -221,7 +225,8 @@ public class FastSpecificDeserializerGeneratorTest {
         record.put("subRecord", subRecord);
 
         // when
-        record = decodeRecord(TestRecord.getClassSchema(), TestRecord.getClassSchema(), specificDataAsDecoder(record));
+        record = deserializeSpecificFast(TestRecord.getClassSchema(), TestRecord.getClassSchema(),
+                serializeSpecific(record));
 
         // then
         Assert.assertEquals("abc",
@@ -248,7 +253,8 @@ public class FastSpecificDeserializerGeneratorTest {
         record.put("recordsMapUnion", recordsMap);
 
         // when
-        record = decodeRecord(TestRecord.getClassSchema(), TestRecord.getClassSchema(), specificDataAsDecoder(record));
+        record = deserializeSpecificFast(TestRecord.getClassSchema(), TestRecord.getClassSchema(),
+                serializeSpecific(record));
 
         // then
         Assert.assertEquals("abc",
@@ -285,7 +291,8 @@ public class FastSpecificDeserializerGeneratorTest {
         record.put("recordsMapArrayUnion", recordsMapArray);
 
         // when
-        record = decodeRecord(TestRecord.getClassSchema(), TestRecord.getClassSchema(), specificDataAsDecoder(record));
+        record = deserializeSpecificFast(TestRecord.getClassSchema(), TestRecord.getClassSchema(),
+                serializeSpecific(record));
 
         // then
         Assert.assertEquals("abc", record.getRecordsArrayMap().get(0).get("1").getSubField());
@@ -337,8 +344,8 @@ public class FastSpecificDeserializerGeneratorTest {
         oldRecord.put("testStringAlias", "abc");
 
         // when
-        TestRecord record = decodeRecord(TestRecord.getClassSchema(), oldRecordSchema,
-                genericDataAsDecoder(oldRecord));
+        TestRecord record = deserializeSpecificFast(TestRecord.getClassSchema(), oldRecordSchema,
+                serializeGeneric(oldRecord));
 
         // then
         Assert.assertEquals("abc", record.getTestStringUnion());
@@ -388,8 +395,8 @@ public class FastSpecificDeserializerGeneratorTest {
         oldRecord.put("recordsMapArray", Collections.emptyMap());
 
         // when
-        TestRecord record = decodeRecord(TestRecord.getClassSchema(), oldRecordSchema,
-                genericDataAsDecoder(oldRecord));
+        TestRecord record = deserializeSpecificFast(TestRecord.getClassSchema(), oldRecordSchema,
+                serializeGeneric(oldRecord));
 
         // then
         Assert.assertEquals("abc", record.getTestStringUnion());
@@ -408,7 +415,8 @@ public class FastSpecificDeserializerGeneratorTest {
         record.put("union", subRecord);
 
         // when
-        record = decodeRecord(TestRecord.getClassSchema(), TestRecord.getClassSchema(), specificDataAsDecoder(record));
+        record = deserializeSpecificFast(TestRecord.getClassSchema(), TestRecord.getClassSchema(),
+                serializeSpecific(record));
 
         // then
         Assert.assertEquals("abc", ((SubRecord) record.getUnion()).getSubField());
@@ -417,7 +425,8 @@ public class FastSpecificDeserializerGeneratorTest {
         record.put("union", "abc");
 
         // when
-        record = decodeRecord(TestRecord.getClassSchema(), TestRecord.getClassSchema(), specificDataAsDecoder(record));
+        record = deserializeSpecificFast(TestRecord.getClassSchema(), TestRecord.getClassSchema(),
+                serializeSpecific(record));
 
         // then
         Assert.assertEquals("abc", record.getUnion());
@@ -426,7 +435,8 @@ public class FastSpecificDeserializerGeneratorTest {
         record.put("union", 1);
 
         // when
-        record = decodeRecord(TestRecord.getClassSchema(), TestRecord.getClassSchema(), specificDataAsDecoder(record));
+        record = deserializeSpecificFast(TestRecord.getClassSchema(), TestRecord.getClassSchema(),
+                serializeSpecific(record));
 
         // then
         Assert.assertEquals(1, record.getUnion());
@@ -445,8 +455,8 @@ public class FastSpecificDeserializerGeneratorTest {
         recordsArray.add(testRecord);
 
         // when
-        List<TestRecord> array = decodeRecord(arrayRecordSchema, arrayRecordSchema,
-                specificDataAsDecoder(recordsArray, arrayRecordSchema));
+        List<TestRecord> array = deserializeSpecificFast(arrayRecordSchema, arrayRecordSchema,
+                serializeSpecific(recordsArray, arrayRecordSchema));
 
         // then
         Assert.assertEquals(2, array.size());
@@ -465,8 +475,8 @@ public class FastSpecificDeserializerGeneratorTest {
         recordsArray.add(testRecord);
 
         // when
-        array = decodeRecord(arrayRecordSchema, arrayRecordSchema,
-                specificDataAsDecoder(recordsArray, arrayRecordSchema));
+        array = deserializeSpecificFast(arrayRecordSchema, arrayRecordSchema,
+                serializeSpecific(recordsArray, arrayRecordSchema));
 
         // then
         Assert.assertEquals(2, array.size());
@@ -487,8 +497,8 @@ public class FastSpecificDeserializerGeneratorTest {
         recordsMap.put("2", testRecord);
 
         // when
-        Map<String, TestRecord> map = decodeRecord(mapRecordSchema, mapRecordSchema,
-                specificDataAsDecoder(recordsMap, mapRecordSchema));
+        Map<String, TestRecord> map = deserializeSpecificFast(mapRecordSchema, mapRecordSchema,
+                serializeSpecific(recordsMap, mapRecordSchema));
 
         // then
         Assert.assertEquals(2, map.size());
@@ -496,7 +506,7 @@ public class FastSpecificDeserializerGeneratorTest {
         Assert.assertEquals("abc", map.get("2").get("testStringUnion"));
 
         // given
-        mapRecordSchema = Schema.createMap(FastSerdeTestsSupport.createUnionSchema(TestRecord
+        mapRecordSchema = Schema.createMap(createUnionSchema(TestRecord
                 .getClassSchema()));
 
         testRecord = emptyTestRecord();
@@ -507,7 +517,8 @@ public class FastSpecificDeserializerGeneratorTest {
         recordsMap.put("2", testRecord);
 
         // when
-        map = decodeRecord(mapRecordSchema, mapRecordSchema, specificDataAsDecoder(recordsMap, mapRecordSchema));
+        map = deserializeSpecificFast(mapRecordSchema, mapRecordSchema,
+                serializeSpecific(recordsMap, mapRecordSchema));
 
         // then
         Assert.assertEquals(2, map.size());
@@ -516,7 +527,7 @@ public class FastSpecificDeserializerGeneratorTest {
     }
 
     @Test
-    public void testNullElementMap() {
+    public void shouldDeserializeNullElementInMap() {
         // given
         Schema mapRecordSchema = Schema.createMap(Schema.createUnion(
                 Schema.create(Schema.Type.STRING), Schema.create(Schema.Type.NULL), Schema.create(Schema.Type.INT)));
@@ -527,8 +538,8 @@ public class FastSpecificDeserializerGeneratorTest {
         records.put("2", 2);
 
         // when
-        Map<String, Object> map = decodeRecord(mapRecordSchema, mapRecordSchema,
-                specificDataAsDecoder(records, mapRecordSchema));
+        Map<String, Object> map = deserializeSpecificFast(mapRecordSchema, mapRecordSchema,
+                serializeSpecific(records, mapRecordSchema));
 
         // then
         Assert.assertEquals(3, map.size());
@@ -538,7 +549,7 @@ public class FastSpecificDeserializerGeneratorTest {
     }
 
     @Test
-    public void testNullElementArray() {
+    public void shouldDeserializeNullElementInArray() {
         // given
         Schema arrayRecordSchema = Schema.createArray(Schema.createUnion(
                 Schema.create(Schema.Type.STRING), Schema.create(Schema.Type.NULL), Schema.create(Schema.Type.INT)));
@@ -549,8 +560,8 @@ public class FastSpecificDeserializerGeneratorTest {
         records.add(2);
 
         // when
-        List<Object> array = decodeRecord(arrayRecordSchema, arrayRecordSchema,
-                specificDataAsDecoder(records, arrayRecordSchema));
+        List<Object> array = deserializeSpecificFast(arrayRecordSchema, arrayRecordSchema,
+                serializeSpecific(records, arrayRecordSchema));
 
         // then
         Assert.assertEquals(3, array.size());
@@ -560,8 +571,7 @@ public class FastSpecificDeserializerGeneratorTest {
     }
 
     @SuppressWarnings("unchecked")
-    private <T> T decodeRecord(Schema readerSchema, Schema writerSchema,
-            Decoder decoder) {
+    private <T> T deserializeSpecificFast(Schema readerSchema, Schema writerSchema, Decoder decoder) {
         FastDeserializer<T> deserializer = new FastSpecificDeserializerGenerator(writerSchema,
                 readerSchema, tempDir, classLoader, null).generateDeserializer();
 
@@ -572,31 +582,4 @@ public class FastSpecificDeserializerGeneratorTest {
         }
     }
 
-    public static TestRecord emptyTestRecord() {
-        TestRecord record = new TestRecord();
-
-        record.put("testFixed", new TestFixed(new byte[] { 0x01 }));
-        record.put("testFixedArray", Collections.EMPTY_LIST);
-        record.put("testFixedUnionArray", Arrays.asList(new TestFixed(new byte[] { 0x01 })));
-
-        record.put("testEnum", TestEnum.A);
-        record.put("testEnumArray", Collections.EMPTY_LIST);
-        record.put("testEnumUnionArray", Arrays.asList(TestEnum.A));
-        record.put("subRecord", new SubRecord());
-
-        record.put("recordsArray", Collections.emptyList());
-        record.put("recordsArrayMap", Collections.emptyList());
-        record.put("recordsMap", Collections.emptyMap());
-        record.put("recordsMapArray", Collections.emptyMap());
-
-        record.put("testInt", 1);
-        record.put("testLong", 1l);
-        record.put("testDouble", 1.0);
-        record.put("testFloat", 1.0f);
-        record.put("testBoolean", true);
-        record.put("testString", "aaa");
-        record.put("testBytes", ByteBuffer.wrap(new byte[] { 0x01, 0x02 }));
-
-        return record;
-    }
 }

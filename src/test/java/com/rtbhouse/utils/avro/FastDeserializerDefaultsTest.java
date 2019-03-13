@@ -1,6 +1,6 @@
 package com.rtbhouse.utils.avro;
 
-import static com.rtbhouse.utils.avro.FastSerdeTestsSupport.genericDataAsDecoder;
+import static com.rtbhouse.utils.avro.FastSerdeTestsSupport.serializeGeneric;
 
 import java.io.File;
 import java.io.IOException;
@@ -63,8 +63,8 @@ public class FastDeserializerDefaultsTest {
         oldRecord.put("oldSubRecord", oldSubRecord);
 
         // when
-        DefaultsTestRecord testRecord = decodeSpecificFast(DefaultsTestRecord.getClassSchema(), oldRecordSchema,
-                genericDataAsDecoder(oldRecord));
+        DefaultsTestRecord testRecord = deserializeSpecificFast(DefaultsTestRecord.getClassSchema(), oldRecordSchema,
+                serializeGeneric(oldRecord));
 
         // then
         Assert.assertEquals(oldSubRecord.get("oldSubField"),
@@ -139,8 +139,8 @@ public class FastDeserializerDefaultsTest {
         oldRecord.put("oldSubRecord", oldSubRecord);
 
         // when
-        GenericRecord testRecord = decodeGenericFast(DefaultsTestRecord.getClassSchema(), oldRecordSchema,
-                genericDataAsDecoder(oldRecord));
+        GenericRecord testRecord = deserializeGenericFast(DefaultsTestRecord.getClassSchema(), oldRecordSchema,
+                serializeGeneric(oldRecord));
 
         // then
         Assert.assertEquals(oldSubRecord.get("oldSubField"),
@@ -218,10 +218,10 @@ public class FastDeserializerDefaultsTest {
         oldRecord.put("oldSubRecord", oldSubRecord);
 
         // when
-        DefaultsTestRecord testRecordSlow = decodeSpecificSlow(DefaultsTestRecord.getClassSchema(),
-                oldRecordSchema, genericDataAsDecoder(oldRecord));
-        DefaultsTestRecord testRecordFast = decodeSpecificFast(DefaultsTestRecord.getClassSchema(),
-                oldRecordSchema, genericDataAsDecoder(oldRecord));
+        DefaultsTestRecord testRecordSlow = deserializeSpecificSlow(DefaultsTestRecord.getClassSchema(),
+                oldRecordSchema, serializeGeneric(oldRecord));
+        DefaultsTestRecord testRecordFast = deserializeSpecificFast(DefaultsTestRecord.getClassSchema(),
+                oldRecordSchema, serializeGeneric(oldRecord));
 
         // then
         Assert.assertEquals(testRecordSlow, testRecordFast);
@@ -239,10 +239,10 @@ public class FastDeserializerDefaultsTest {
         oldRecord.put("oldSubRecord", oldSubRecord);
 
         // when
-        GenericRecord testRecordSlow = decodeGenericSlow(DefaultsTestRecord.getClassSchema(),
-                oldRecordSchema, genericDataAsDecoder(oldRecord));
-        GenericRecord testRecordFast = decodeGenericFast(DefaultsTestRecord.getClassSchema(),
-                oldRecordSchema, genericDataAsDecoder(oldRecord));
+        GenericRecord testRecordSlow = deserializeGenericSlow(DefaultsTestRecord.getClassSchema(),
+                oldRecordSchema, serializeGeneric(oldRecord));
+        GenericRecord testRecordFast = deserializeGenericFast(DefaultsTestRecord.getClassSchema(),
+                oldRecordSchema, serializeGeneric(oldRecord));
 
         // then
         Assert.assertEquals(testRecordSlow, testRecordFast);
@@ -292,7 +292,7 @@ public class FastDeserializerDefaultsTest {
         Schema newRecordSchema = parser
                 .parse(this.getClass().getResourceAsStream("/schema/defaultsTestSubrecord.avsc"));
         // when
-        GenericRecord record = decodeGenericFast(newRecordSchema, oldRecordSchema, genericDataAsDecoder(oldRecord));
+        GenericRecord record = deserializeGenericFast(newRecordSchema, oldRecordSchema, serializeGeneric(oldRecord));
 
         // then
         GenericData.Record newSubRecord = new GenericData.Record(newRecordSchema.getField("subRecordUnion")
@@ -337,7 +337,7 @@ public class FastDeserializerDefaultsTest {
     }
 
     @SuppressWarnings("unchecked")
-    private <T> T decodeSpecificSlow(Schema readerSchema, Schema writerSchema, Decoder decoder) {
+    private <T> T deserializeSpecificSlow(Schema readerSchema, Schema writerSchema, Decoder decoder) {
         org.apache.avro.io.DatumReader<T> datumReader = new SpecificDatumReader<>(writerSchema, readerSchema);
         try {
             return datumReader.read(null, decoder);
@@ -349,7 +349,7 @@ public class FastDeserializerDefaultsTest {
     }
 
     @SuppressWarnings("unchecked")
-    private GenericRecord decodeGenericSlow(Schema readerSchema, Schema writerSchema, Decoder decoder) {
+    private GenericRecord deserializeGenericSlow(Schema readerSchema, Schema writerSchema, Decoder decoder) {
         org.apache.avro.io.DatumReader<GenericData> datumReader = new GenericDatumReader<>(writerSchema, readerSchema);
         try {
             return (GenericRecord) datumReader.read(null, decoder);
@@ -361,7 +361,7 @@ public class FastDeserializerDefaultsTest {
     }
 
     @SuppressWarnings("unchecked")
-    private <T> T decodeSpecificFast(Schema readerSchema, Schema writerSchema, Decoder decoder) {
+    private <T> T deserializeSpecificFast(Schema readerSchema, Schema writerSchema, Decoder decoder) {
         FastDeserializer<T> deserializer = new FastSpecificDeserializerGenerator(writerSchema,
                 readerSchema, tempDir, classLoader, null).generateDeserializer();
 
@@ -373,7 +373,7 @@ public class FastDeserializerDefaultsTest {
     }
 
     @SuppressWarnings("unchecked")
-    private GenericRecord decodeGenericFast(Schema readerSchema, Schema writerSchema, Decoder decoder) {
+    private GenericRecord deserializeGenericFast(Schema readerSchema, Schema writerSchema, Decoder decoder) {
         FastDeserializer<GenericRecord> deserializer = new FastGenericDeserializerGenerator(writerSchema,
                 readerSchema, tempDir, classLoader, null).generateDeserializer();
 

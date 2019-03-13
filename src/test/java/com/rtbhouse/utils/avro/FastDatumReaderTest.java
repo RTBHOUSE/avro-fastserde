@@ -2,7 +2,9 @@ package com.rtbhouse.utils.avro;
 
 import static com.rtbhouse.utils.avro.FastSerdeTestsSupport.createPrimitiveUnionFieldSchema;
 import static com.rtbhouse.utils.avro.FastSerdeTestsSupport.createRecord;
-import static com.rtbhouse.utils.avro.FastSerdeTestsSupport.specificDataAsDecoder;
+import static com.rtbhouse.utils.avro.FastSerdeTestsSupport.emptyTestRecord;
+import static com.rtbhouse.utils.avro.FastSerdeTestsSupport.serializeGeneric;
+import static com.rtbhouse.utils.avro.FastSerdeTestsSupport.serializeSpecific;
 
 import java.io.IOException;
 
@@ -33,11 +35,11 @@ public class FastDatumReaderTest {
         FastSpecificDatumReader<TestRecord> fastSpecificDatumReader = new FastSpecificDatumReader<>(
                 TestRecord.getClassSchema(), cache);
 
-        TestRecord testRecord = FastSpecificDeserializerGeneratorTest.emptyTestRecord();
+        TestRecord testRecord = emptyTestRecord();
         testRecord.put("testEnum", TestEnum.A);
 
         // when
-        fastSpecificDatumReader.read(null, specificDataAsDecoder(testRecord));
+        fastSpecificDatumReader.read(null, serializeSpecific(testRecord));
 
         // then
         FastDeserializer<TestRecord> fastSpecificDeserializer =
@@ -53,7 +55,7 @@ public class FastDatumReaderTest {
         Assert.assertEquals(
                 TestEnum.A,
                 fastSpecificDatumReader.read(null,
-                        FastSerdeTestsSupport.specificDataAsDecoder(testRecord)).getTestEnum());
+                        FastSerdeTestsSupport.serializeSpecific(testRecord)).getTestEnum());
     }
 
     @Test
@@ -64,11 +66,11 @@ public class FastDatumReaderTest {
         FastSpecificDatumReader<TestRecord> fastSpecificDatumReader = new FastSpecificDatumReader<>(
                 TestRecord.getClassSchema(), faultySchema, cache);
 
-        TestRecord testRecord = FastSpecificDeserializerGeneratorTest.emptyTestRecord();
+        TestRecord testRecord = emptyTestRecord();
         testRecord.put("testEnum", TestEnum.A);
 
         // when
-        fastSpecificDatumReader.read(null, FastSerdeTestsSupport.specificDataAsDecoder(testRecord));
+        fastSpecificDatumReader.read(null, FastSerdeTestsSupport.serializeSpecific(testRecord));
 
         // then
         FastDeserializer<TestRecord> fastSpecificDeserializer =
@@ -95,7 +97,7 @@ public class FastDatumReaderTest {
         recordBuilder.set("test", "test");
 
         // when
-        fastGenericDatumReader.read(null, FastSerdeTestsSupport.genericDataAsDecoder(recordBuilder.build()));
+        fastGenericDatumReader.read(null, serializeGeneric(recordBuilder.build()));
 
         // then
         FastDeserializer<GenericRecord> fastGenericDeserializer =
@@ -110,6 +112,6 @@ public class FastDatumReaderTest {
         Assert.assertNotEquals(2, fastGenericDeserializer.getClass().getDeclaredMethods().length);
         Assert.assertEquals(
                 "test",
-                fastGenericDatumReader.read(null, FastSerdeTestsSupport.genericDataAsDecoder(recordBuilder.build())).get("test"));
+                fastGenericDatumReader.read(null, serializeGeneric(recordBuilder.build())).get("test"));
     }
 }

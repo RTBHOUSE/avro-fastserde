@@ -2,6 +2,7 @@ package com.rtbhouse.utils.avro;
 
 import static com.rtbhouse.utils.avro.FastSerdeTestsSupport.createPrimitiveUnionFieldSchema;
 import static com.rtbhouse.utils.avro.FastSerdeTestsSupport.createRecord;
+import static com.rtbhouse.utils.avro.FastSerdeTestsSupport.emptyTestRecord;
 
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
@@ -33,7 +34,7 @@ public class FastDatumWriterTest {
         FastSpecificDatumWriter<TestRecord> fastSpecificDatumWriter = new FastSpecificDatumWriter<>(
                 TestRecord.getClassSchema(), cache);
 
-        TestRecord testRecord = FastSpecificDeserializerGeneratorTest.emptyTestRecord();
+        TestRecord testRecord = emptyTestRecord();
         testRecord.put("testEnum", TestEnum.A);
 
         // when
