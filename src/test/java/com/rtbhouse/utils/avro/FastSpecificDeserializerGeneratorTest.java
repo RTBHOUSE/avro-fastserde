@@ -1,8 +1,9 @@
 package com.rtbhouse.utils.avro;
 
 import static com.rtbhouse.utils.avro.FastSerdeTestsSupport.createUnionSchema;
-import static com.rtbhouse.utils.avro.FastSerdeTestsSupport.genericDataAsDecoder;
-import static com.rtbhouse.utils.avro.FastSerdeTestsSupport.specificDataAsDecoder;
+import static com.rtbhouse.utils.avro.FastSerdeTestsSupport.emptyTestRecord;
+import static com.rtbhouse.utils.avro.FastSerdeTestsSupport.serializeGeneric;
+import static com.rtbhouse.utils.avro.FastSerdeTestsSupport.serializeSpecific;
 
 import java.io.File;
 import java.io.IOException;
@@ -40,8 +41,8 @@ public class FastSpecificDeserializerGeneratorTest {
         Path tempPath = Files.createTempDirectory("generated");
         tempDir = tempPath.toFile();
 
-        classLoader = URLClassLoader.newInstance(new URL[]{ tempDir.toURI().toURL() },
-            FastSpecificDeserializerGeneratorTest.class.getClassLoader());
+        classLoader = URLClassLoader.newInstance(new URL[] { tempDir.toURI().toURL() },
+                FastSpecificDeserializerGeneratorTest.class.getClassLoader());
     }
 
     @Test
@@ -59,11 +60,12 @@ public class FastSpecificDeserializerGeneratorTest {
         record.put("testFloatUnion", 1.0f);
         record.put("testBoolean", true);
         record.put("testBooleanUnion", true);
-        record.put("testBytes", ByteBuffer.wrap(new byte[]{ 0x01, 0x02 }));
-        record.put("testBytesUnion", ByteBuffer.wrap(new byte[]{ 0x01, 0x02 }));
+        record.put("testBytes", ByteBuffer.wrap(new byte[] { 0x01, 0x02 }));
+        record.put("testBytesUnion", ByteBuffer.wrap(new byte[] { 0x01, 0x02 }));
 
         // when
-        record = decodeRecord(TestRecord.getClassSchema(), TestRecord.getClassSchema(), specificDataAsDecoder(record));
+        record = deserializeSpecificFast(TestRecord.getClassSchema(), TestRecord.getClassSchema(),
+                serializeSpecific(record));
 
         // then
         Assert.assertEquals(1, record.get("testInt"));
@@ -78,8 +80,8 @@ public class FastSpecificDeserializerGeneratorTest {
         Assert.assertEquals(1.0f, record.get("testFloatUnion"));
         Assert.assertEquals(true, record.get("testBoolean"));
         Assert.assertEquals(true, record.get("testBooleanUnion"));
-        Assert.assertEquals(ByteBuffer.wrap(new byte[]{0x01, 0x02}), record.get("testBytes"));
-        Assert.assertEquals(ByteBuffer.wrap(new byte[]{0x01, 0x02}), record.get("testBytesUnion"));
+        Assert.assertEquals(ByteBuffer.wrap(new byte[] { 0x01, 0x02 }), record.get("testBytes"));
+        Assert.assertEquals(ByteBuffer.wrap(new byte[] { 0x01, 0x02 }), record.get("testBytesUnion"));
 
     }
 
@@ -88,19 +90,20 @@ public class FastSpecificDeserializerGeneratorTest {
         // given
         TestRecord record = emptyTestRecord();
 
-        record.put("testFixed", new TestFixed(new byte[]{0x01}));
-        record.put("testFixedUnion", new TestFixed(new byte[]{0x02}));
-        record.put("testFixedArray", Arrays.asList(new TestFixed(new byte[]{0x03})));
-        record.put("testFixedUnionArray", Arrays.asList(new TestFixed(new byte[]{0x04})));
+        record.put("testFixed", new TestFixed(new byte[] { 0x01 }));
+        record.put("testFixedUnion", new TestFixed(new byte[] { 0x02 }));
+        record.put("testFixedArray", Arrays.asList(new TestFixed(new byte[] { 0x03 })));
+        record.put("testFixedUnionArray", Arrays.asList(new TestFixed(new byte[] { 0x04 })));
 
         // when
-        record = decodeRecord(TestRecord.getClassSchema(), TestRecord.getClassSchema(), specificDataAsDecoder(record));
+        record = deserializeSpecificFast(TestRecord.getClassSchema(), TestRecord.getClassSchema(),
+                serializeSpecific(record));
 
         // then
-        Assert.assertArrayEquals(new byte[]{ 0x01 }, record.getTestFixed().bytes());
-        Assert.assertArrayEquals(new byte[]{ 0x02 }, record.getTestFixedUnion().bytes());
-        Assert.assertArrayEquals(new byte[]{ 0x03 }, record.getTestFixedArray().get(0).bytes());
-        Assert.assertArrayEquals(new byte[]{ 0x04 }, record.getTestFixedUnionArray().get(0).bytes());
+        Assert.assertArrayEquals(new byte[] { 0x01 }, record.getTestFixed().bytes());
+        Assert.assertArrayEquals(new byte[] { 0x02 }, record.getTestFixedUnion().bytes());
+        Assert.assertArrayEquals(new byte[] { 0x03 }, record.getTestFixedArray().get(0).bytes());
+        Assert.assertArrayEquals(new byte[] { 0x04 }, record.getTestFixedUnionArray().get(0).bytes());
     }
 
     @Test
@@ -114,7 +117,8 @@ public class FastSpecificDeserializerGeneratorTest {
         record.put("testEnumUnionArray", Arrays.asList(TestEnum.A));
 
         // when
-        record = decodeRecord(TestRecord.getClassSchema(), TestRecord.getClassSchema(), specificDataAsDecoder(record));
+        record = deserializeSpecificFast(TestRecord.getClassSchema(), TestRecord.getClassSchema(),
+                serializeSpecific(record));
 
         // then
         Assert.assertEquals(TestEnum.A, record.getTestEnum());
@@ -124,11 +128,12 @@ public class FastSpecificDeserializerGeneratorTest {
     }
 
     @Test
-    public void shouldReadPermutatedEnum() throws IOException {
+    public void shouldReadPermutedEnum() throws IOException {
         // given
         Schema.Parser parser = new Schema.Parser();
         Schema oldRecordSchema = parser.parse(this.getClass().getResourceAsStream("/schema/fastserdetestold.avsc"));
-        GenericData.Fixed testFixed = new GenericData.Fixed(oldRecordSchema.getField("testFixed").schema(), new byte[]{0x01});
+        GenericData.Fixed testFixed = new GenericData.Fixed(oldRecordSchema.getField("testFixed").schema(),
+                new byte[] { 0x01 });
         GenericData.Record subRecord = new GenericData.Record(oldRecordSchema.getField("subRecordUnion").schema()
                 .getTypes().get(1));
         GenericData.Record oldRecord = new GenericData.Record(oldRecordSchema);
@@ -136,8 +141,8 @@ public class FastSpecificDeserializerGeneratorTest {
         oldRecord.put("testLong", 1l);
         oldRecord.put("testDouble", 1.0);
         oldRecord.put("testFloat", 1.0f);
-        oldRecord.put("testBoolean",true);
-        oldRecord.put("testBytes", ByteBuffer.wrap(new byte[]{0x01, 0x02}));
+        oldRecord.put("testBoolean", true);
+        oldRecord.put("testBytes", ByteBuffer.wrap(new byte[] { 0x01, 0x02 }));
         oldRecord.put("testString", "aaa");
         oldRecord.put("testFixed", testFixed);
         oldRecord.put("testFixedUnion", testFixed);
@@ -159,8 +164,8 @@ public class FastSpecificDeserializerGeneratorTest {
         oldRecord.put("recordsMapArray", Collections.emptyMap());
 
         // when
-        TestRecord record = decodeRecord(TestRecord.getClassSchema(), oldRecordSchema,
-                genericDataAsDecoder(oldRecord));
+        TestRecord record = deserializeSpecificFast(TestRecord.getClassSchema(), oldRecordSchema,
+                serializeGeneric(oldRecord));
 
         // then
         Assert.assertEquals(TestEnum.A, record.getTestEnum());
@@ -174,8 +179,9 @@ public class FastSpecificDeserializerGeneratorTest {
         // given
         Schema.Parser parser = new Schema.Parser();
         Schema oldRecordSchema = parser.parse(this.getClass().getResourceAsStream(
-            "/schema/fastserdetestoldextendedenum.avsc"));
-        GenericData.Fixed testFixed = new GenericData.Fixed(oldRecordSchema.getField("testFixed").schema(), new byte[]{0x01});
+                "/schema/fastserdetestoldextendedenum.avsc"));
+        GenericData.Fixed testFixed = new GenericData.Fixed(oldRecordSchema.getField("testFixed").schema(),
+                new byte[] { 0x01 });
         GenericData.Record subRecord = new GenericData.Record(oldRecordSchema.getField("subRecordUnion").schema()
                 .getTypes().get(1));
         GenericData.Record oldRecord = new GenericData.Record(oldRecordSchema);
@@ -183,8 +189,8 @@ public class FastSpecificDeserializerGeneratorTest {
         oldRecord.put("testLong", 1l);
         oldRecord.put("testDouble", 1.0);
         oldRecord.put("testFloat", 1.0f);
-        oldRecord.put("testBoolean",true);
-        oldRecord.put("testBytes", ByteBuffer.wrap(new byte[]{0x01, 0x02}));
+        oldRecord.put("testBoolean", true);
+        oldRecord.put("testBytes", ByteBuffer.wrap(new byte[] { 0x01, 0x02 }));
         oldRecord.put("testString", "aaa");
         oldRecord.put("testFixed", testFixed);
         oldRecord.put("testFixedUnion", testFixed);
@@ -204,8 +210,8 @@ public class FastSpecificDeserializerGeneratorTest {
         oldRecord.put("recordsMapArray", Collections.emptyMap());
 
         // when
-        TestRecord record = decodeRecord(TestRecord.getClassSchema(), oldRecordSchema,
-                genericDataAsDecoder(oldRecord));
+        TestRecord record = deserializeSpecificFast(TestRecord.getClassSchema(), oldRecordSchema,
+                serializeGeneric(oldRecord));
     }
 
     @Test
@@ -219,7 +225,8 @@ public class FastSpecificDeserializerGeneratorTest {
         record.put("subRecord", subRecord);
 
         // when
-        record = decodeRecord(TestRecord.getClassSchema(), TestRecord.getClassSchema(), specificDataAsDecoder(record));
+        record = deserializeSpecificFast(TestRecord.getClassSchema(), TestRecord.getClassSchema(),
+                serializeSpecific(record));
 
         // then
         Assert.assertEquals("abc",
@@ -246,7 +253,8 @@ public class FastSpecificDeserializerGeneratorTest {
         record.put("recordsMapUnion", recordsMap);
 
         // when
-        record = decodeRecord(TestRecord.getClassSchema(), TestRecord.getClassSchema(), specificDataAsDecoder(record));
+        record = deserializeSpecificFast(TestRecord.getClassSchema(), TestRecord.getClassSchema(),
+                serializeSpecific(record));
 
         // then
         Assert.assertEquals("abc",
@@ -283,7 +291,8 @@ public class FastSpecificDeserializerGeneratorTest {
         record.put("recordsMapArrayUnion", recordsMapArray);
 
         // when
-        record = decodeRecord(TestRecord.getClassSchema(), TestRecord.getClassSchema(), specificDataAsDecoder(record));
+        record = deserializeSpecificFast(TestRecord.getClassSchema(), TestRecord.getClassSchema(),
+                serializeSpecific(record));
 
         // then
         Assert.assertEquals("abc", record.getRecordsArrayMap().get(0).get("1").getSubField());
@@ -303,15 +312,17 @@ public class FastSpecificDeserializerGeneratorTest {
         Schema oldRecordSchema = parser.parse(this.getClass().getResourceAsStream("/schema/fastserdetestold.avsc"));
         GenericData.Record subRecord = new GenericData.Record(oldRecordSchema.getField("subRecordUnion").schema()
                 .getTypes().get(1));
-        GenericData.EnumSymbol testEnum = new GenericData.EnumSymbol(oldRecordSchema.getField("testEnum").schema(), "A");
-        GenericData.Fixed testFixed = new GenericData.Fixed(oldRecordSchema.getField("testFixed").schema(), new byte[]{0x01});
+        GenericData.EnumSymbol testEnum = new GenericData.EnumSymbol(oldRecordSchema.getField("testEnum").schema(),
+                "A");
+        GenericData.Fixed testFixed = new GenericData.Fixed(oldRecordSchema.getField("testFixed").schema(),
+                new byte[] { 0x01 });
         GenericData.Record oldRecord = new GenericData.Record(oldRecordSchema);
         oldRecord.put("testInt", 1);
         oldRecord.put("testLong", 1l);
         oldRecord.put("testDouble", 1.0);
         oldRecord.put("testFloat", 1.0f);
-        oldRecord.put("testBoolean",true);
-        oldRecord.put("testBytes", ByteBuffer.wrap(new byte[]{0x01, 0x02}));
+        oldRecord.put("testBoolean", true);
+        oldRecord.put("testBytes", ByteBuffer.wrap(new byte[] { 0x01, 0x02 }));
         oldRecord.put("testString", "aaa");
         oldRecord.put("testFixed", testFixed);
         oldRecord.put("testFixedUnion", testFixed);
@@ -333,8 +344,8 @@ public class FastSpecificDeserializerGeneratorTest {
         oldRecord.put("testStringAlias", "abc");
 
         // when
-        TestRecord record = decodeRecord(TestRecord.getClassSchema(), oldRecordSchema,
-                genericDataAsDecoder(oldRecord));
+        TestRecord record = deserializeSpecificFast(TestRecord.getClassSchema(), oldRecordSchema,
+                serializeGeneric(oldRecord));
 
         // then
         Assert.assertEquals("abc", record.getTestStringUnion());
@@ -348,15 +359,17 @@ public class FastSpecificDeserializerGeneratorTest {
 
         GenericData.Record subRecord = new GenericData.Record(oldRecordSchema.getField("subRecordUnion").schema()
                 .getTypes().get(1));
-        GenericData.EnumSymbol testEnum = new GenericData.EnumSymbol(oldRecordSchema.getField("testEnum").schema(), "A");
-        GenericData.Fixed testFixed = new GenericData.Fixed(oldRecordSchema.getField("testFixed").schema(), new byte[]{0x01});
+        GenericData.EnumSymbol testEnum = new GenericData.EnumSymbol(oldRecordSchema.getField("testEnum").schema(),
+                "A");
+        GenericData.Fixed testFixed = new GenericData.Fixed(oldRecordSchema.getField("testFixed").schema(),
+                new byte[] { 0x01 });
         GenericData.Record oldRecord = new GenericData.Record(oldRecordSchema);
         oldRecord.put("testInt", 1);
         oldRecord.put("testLong", 1l);
         oldRecord.put("testDouble", 1.0);
         oldRecord.put("testFloat", 1.0f);
-        oldRecord.put("testBoolean",true);
-        oldRecord.put("testBytes", ByteBuffer.wrap(new byte[]{0x01, 0x02}));
+        oldRecord.put("testBoolean", true);
+        oldRecord.put("testBytes", ByteBuffer.wrap(new byte[] { 0x01, 0x02 }));
         oldRecord.put("testString", "aaa");
         oldRecord.put("testStringAlias", "abc");
         oldRecord.put("removedField", "def");
@@ -382,8 +395,8 @@ public class FastSpecificDeserializerGeneratorTest {
         oldRecord.put("recordsMapArray", Collections.emptyMap());
 
         // when
-        TestRecord record = decodeRecord(TestRecord.getClassSchema(), oldRecordSchema,
-                genericDataAsDecoder(oldRecord));
+        TestRecord record = deserializeSpecificFast(TestRecord.getClassSchema(), oldRecordSchema,
+                serializeGeneric(oldRecord));
 
         // then
         Assert.assertEquals("abc", record.getTestStringUnion());
@@ -402,7 +415,8 @@ public class FastSpecificDeserializerGeneratorTest {
         record.put("union", subRecord);
 
         // when
-        record = decodeRecord(TestRecord.getClassSchema(), TestRecord.getClassSchema(), specificDataAsDecoder(record));
+        record = deserializeSpecificFast(TestRecord.getClassSchema(), TestRecord.getClassSchema(),
+                serializeSpecific(record));
 
         // then
         Assert.assertEquals("abc", ((SubRecord) record.getUnion()).getSubField());
@@ -411,7 +425,8 @@ public class FastSpecificDeserializerGeneratorTest {
         record.put("union", "abc");
 
         // when
-        record = decodeRecord(TestRecord.getClassSchema(), TestRecord.getClassSchema(), specificDataAsDecoder(record));
+        record = deserializeSpecificFast(TestRecord.getClassSchema(), TestRecord.getClassSchema(),
+                serializeSpecific(record));
 
         // then
         Assert.assertEquals("abc", record.getUnion());
@@ -420,7 +435,8 @@ public class FastSpecificDeserializerGeneratorTest {
         record.put("union", 1);
 
         // when
-        record = decodeRecord(TestRecord.getClassSchema(), TestRecord.getClassSchema(), specificDataAsDecoder(record));
+        record = deserializeSpecificFast(TestRecord.getClassSchema(), TestRecord.getClassSchema(),
+                serializeSpecific(record));
 
         // then
         Assert.assertEquals(1, record.getUnion());
@@ -439,8 +455,8 @@ public class FastSpecificDeserializerGeneratorTest {
         recordsArray.add(testRecord);
 
         // when
-        List<TestRecord> array = decodeRecord(arrayRecordSchema, arrayRecordSchema,
-            specificDataAsDecoder(recordsArray, arrayRecordSchema));
+        List<TestRecord> array = deserializeSpecificFast(arrayRecordSchema, arrayRecordSchema,
+                serializeSpecific(recordsArray, arrayRecordSchema));
 
         // then
         Assert.assertEquals(2, array.size());
@@ -459,7 +475,8 @@ public class FastSpecificDeserializerGeneratorTest {
         recordsArray.add(testRecord);
 
         // when
-        array = decodeRecord(arrayRecordSchema, arrayRecordSchema, specificDataAsDecoder(recordsArray, arrayRecordSchema));
+        array = deserializeSpecificFast(arrayRecordSchema, arrayRecordSchema,
+                serializeSpecific(recordsArray, arrayRecordSchema));
 
         // then
         Assert.assertEquals(2, array.size());
@@ -480,8 +497,8 @@ public class FastSpecificDeserializerGeneratorTest {
         recordsMap.put("2", testRecord);
 
         // when
-        Map<String, TestRecord> map = decodeRecord(mapRecordSchema, mapRecordSchema,
-                specificDataAsDecoder(recordsMap, mapRecordSchema));
+        Map<String, TestRecord> map = deserializeSpecificFast(mapRecordSchema, mapRecordSchema,
+                serializeSpecific(recordsMap, mapRecordSchema));
 
         // then
         Assert.assertEquals(2, map.size());
@@ -489,8 +506,8 @@ public class FastSpecificDeserializerGeneratorTest {
         Assert.assertEquals("abc", map.get("2").get("testStringUnion"));
 
         // given
-        mapRecordSchema = Schema.createMap(FastSerdeTestsSupport.createUnionSchema(TestRecord
-            .getClassSchema()));
+        mapRecordSchema = Schema.createMap(createUnionSchema(TestRecord
+                .getClassSchema()));
 
         testRecord = emptyTestRecord();
         testRecord.put("testStringUnion", "abc");
@@ -500,7 +517,8 @@ public class FastSpecificDeserializerGeneratorTest {
         recordsMap.put("2", testRecord);
 
         // when
-        map = decodeRecord(mapRecordSchema, mapRecordSchema, specificDataAsDecoder(recordsMap, mapRecordSchema));
+        map = deserializeSpecificFast(mapRecordSchema, mapRecordSchema,
+                serializeSpecific(recordsMap, mapRecordSchema));
 
         // then
         Assert.assertEquals(2, map.size());
@@ -508,9 +526,52 @@ public class FastSpecificDeserializerGeneratorTest {
         Assert.assertEquals("abc", map.get("2").get("testStringUnion"));
     }
 
+    @Test
+    public void shouldDeserializeNullElementInMap() {
+        // given
+        Schema mapRecordSchema = Schema.createMap(Schema.createUnion(
+                Schema.create(Schema.Type.STRING), Schema.create(Schema.Type.NULL), Schema.create(Schema.Type.INT)));
+
+        Map<String, Object> records = new HashMap<>();
+        records.put("0", "0");
+        records.put("1", null);
+        records.put("2", 2);
+
+        // when
+        Map<String, Object> map = deserializeSpecificFast(mapRecordSchema, mapRecordSchema,
+                serializeSpecific(records, mapRecordSchema));
+
+        // then
+        Assert.assertEquals(3, map.size());
+        Assert.assertEquals("0", map.get("0"));
+        Assert.assertNull(map.get("1"));
+        Assert.assertEquals(2, map.get("2"));
+    }
+
+    @Test
+    public void shouldDeserializeNullElementInArray() {
+        // given
+        Schema arrayRecordSchema = Schema.createArray(Schema.createUnion(
+                Schema.create(Schema.Type.STRING), Schema.create(Schema.Type.NULL), Schema.create(Schema.Type.INT)));
+
+        List<Object> records = new ArrayList<>();
+        records.add("0");
+        records.add(null);
+        records.add(2);
+
+        // when
+        List<Object> array = deserializeSpecificFast(arrayRecordSchema, arrayRecordSchema,
+                serializeSpecific(records, arrayRecordSchema));
+
+        // then
+        Assert.assertEquals(3, array.size());
+        Assert.assertEquals("0", array.get(0));
+        Assert.assertNull(array.get(1));
+        Assert.assertEquals(2, array.get(2));
+    }
+
     @SuppressWarnings("unchecked")
-    private <T> T decodeRecord(Schema readerSchema, Schema writerSchema,
-            Decoder decoder) {
+    private <T> T deserializeSpecificFast(Schema readerSchema, Schema writerSchema, Decoder decoder) {
         FastDeserializer<T> deserializer = new FastSpecificDeserializerGenerator(writerSchema,
                 readerSchema, tempDir, classLoader, null).generateDeserializer();
 
@@ -521,31 +582,4 @@ public class FastSpecificDeserializerGeneratorTest {
         }
     }
 
-    public static TestRecord emptyTestRecord() {
-        TestRecord record = new TestRecord();
-
-        record.put("testFixed", new TestFixed(new byte[]{0x01}));
-        record.put("testFixedArray", Collections.EMPTY_LIST);
-        record.put("testFixedUnionArray", Arrays.asList(new TestFixed(new byte[]{0x01})));
-
-        record.put("testEnum", TestEnum.A);
-        record.put("testEnumArray", Collections.EMPTY_LIST);
-        record.put("testEnumUnionArray", Arrays.asList(TestEnum.A));
-        record.put("subRecord", new SubRecord());
-
-        record.put("recordsArray", Collections.emptyList());
-        record.put("recordsArrayMap", Collections.emptyList());
-        record.put("recordsMap", Collections.emptyMap());
-        record.put("recordsMapArray", Collections.emptyMap());
-
-        record.put("testInt", 1);
-        record.put("testLong", 1l);
-        record.put("testDouble", 1.0);
-        record.put("testFloat", 1.0f);
-        record.put("testBoolean", true);
-        record.put("testString", "aaa");
-        record.put("testBytes", ByteBuffer.wrap(new byte[]{0x01, 0x02}));
-
-        return record;
-    }
 }
