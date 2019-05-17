@@ -22,6 +22,7 @@ import java.util.Map;
 import org.apache.avro.Schema;
 import org.apache.avro.generic.GenericData;
 import org.apache.avro.io.Decoder;
+import org.apache.avro.util.Utf8;
 import org.junit.Assert;
 import org.junit.Before;
 import org.junit.Test;
@@ -497,13 +498,13 @@ public class FastSpecificDeserializerGeneratorTest {
         recordsMap.put("2", testRecord);
 
         // when
-        Map<String, TestRecord> map = deserializeSpecificFast(mapRecordSchema, mapRecordSchema,
+        Map<Utf8, TestRecord> map = deserializeSpecificFast(mapRecordSchema, mapRecordSchema,
                 serializeSpecific(recordsMap, mapRecordSchema));
 
         // then
         Assert.assertEquals(2, map.size());
-        Assert.assertEquals("abc", map.get("1").get("testStringUnion"));
-        Assert.assertEquals("abc", map.get("2").get("testStringUnion"));
+        Assert.assertEquals("abc", map.get(new Utf8("1")).get("testStringUnion").toString());
+        Assert.assertEquals("abc", map.get(new Utf8("2")).get("testStringUnion").toString());
 
         // given
         mapRecordSchema = Schema.createMap(createUnionSchema(TestRecord
@@ -522,15 +523,16 @@ public class FastSpecificDeserializerGeneratorTest {
 
         // then
         Assert.assertEquals(2, map.size());
-        Assert.assertEquals("abc", map.get("1").get("testStringUnion"));
-        Assert.assertEquals("abc", map.get("2").get("testStringUnion"));
+        Assert.assertEquals("abc", map.get(new Utf8("1")).get("testStringUnion"));
+        Assert.assertEquals("abc", map.get(new Utf8("2")).get("testStringUnion"));
     }
 
     @Test
     public void shouldDeserializeNullElementInMap() {
         // given
+        Schema stringSchema = Schema.create(Schema.Type.STRING);
         Schema mapRecordSchema = Schema.createMap(Schema.createUnion(
-                Schema.create(Schema.Type.STRING), Schema.create(Schema.Type.NULL), Schema.create(Schema.Type.INT)));
+                stringSchema, Schema.create(Schema.Type.NULL), Schema.create(Schema.Type.INT)));
 
         Map<String, Object> records = new HashMap<>();
         records.put("0", "0");
@@ -538,14 +540,14 @@ public class FastSpecificDeserializerGeneratorTest {
         records.put("2", 2);
 
         // when
-        Map<String, Object> map = deserializeSpecificFast(mapRecordSchema, mapRecordSchema,
+        Map<Utf8, Object> map = deserializeSpecificFast(mapRecordSchema, mapRecordSchema,
                 serializeSpecific(records, mapRecordSchema));
 
         // then
         Assert.assertEquals(3, map.size());
-        Assert.assertEquals("0", map.get("0"));
-        Assert.assertNull(map.get("1"));
-        Assert.assertEquals(2, map.get("2"));
+        Assert.assertEquals("0", map.get(new Utf8("0")).toString());
+        Assert.assertNull(map.get(new Utf8("1")));
+        Assert.assertEquals(2, map.get(new Utf8("2")));
     }
 
     @Test
@@ -565,7 +567,7 @@ public class FastSpecificDeserializerGeneratorTest {
 
         // then
         Assert.assertEquals(3, array.size());
-        Assert.assertEquals("0", array.get(0));
+        Assert.assertEquals("0", array.get(0).toString());
         Assert.assertNull(array.get(1));
         Assert.assertEquals(2, array.get(2));
     }

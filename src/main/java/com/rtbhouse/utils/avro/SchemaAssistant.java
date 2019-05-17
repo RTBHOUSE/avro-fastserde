@@ -23,15 +23,18 @@ import com.sun.codemodel.JCodeModel;
 import com.sun.codemodel.JExpr;
 import com.sun.codemodel.JExpression;
 import com.sun.codemodel.JInvocation;
+import org.apache.avro.util.Utf8;
 
 public class SchemaAssistant {
     private final JCodeModel codeModel;
     private final boolean useGenericTypes;
+    private final boolean useCharSequence;
     private Set<Class<? extends Exception>> exceptionsFromStringable;
 
-    public SchemaAssistant(JCodeModel codeModel, boolean useGenericTypes) {
+    public SchemaAssistant(JCodeModel codeModel, boolean useGenericTypes, boolean useCharSequence) {
         this.codeModel = codeModel;
         this.useGenericTypes = useGenericTypes;
+        this.useCharSequence = useCharSequence;
         this.exceptionsFromStringable = new HashSet<>();
     }
 
@@ -59,14 +62,23 @@ public class SchemaAssistant {
     }
 
     public JClass keyClassFromMapSchema(Schema schema) {
+
         if (!Schema.Type.MAP.equals(schema.getType())) {
             throw new SchemaAssistantException("Map schema was expected, instead got:" + schema.getType().getName());
         }
+
+
         if (hasStringableKey(schema) && !useGenericTypes) {
             extendExceptionsFromStringable(schema.getProp(SpecificData.KEY_CLASS_PROP));
             return codeModel.ref(schema.getProp(SpecificData.KEY_CLASS_PROP));
         } else {
-            return codeModel.ref(String.class);
+            if (useCharSequence) {
+                return codeModel.ref(CharSequence.class);
+            } else if ("String".equals(schema.getProp(GenericData.STRING_PROP))) {
+                return codeModel.ref(String.class);
+            } else {
+                return codeModel.ref(Utf8.class);
+            }
         }
     }
 
@@ -120,74 +132,81 @@ public class SchemaAssistant {
 
         switch (schema.getType()) {
 
-        case RECORD:
-            outputClass = useGenericTypes ? codeModel.ref(GenericData.Record.class)
-                    : codeModel.ref(schema.getFullName());
-            break;
+            case RECORD:
+                outputClass = useGenericTypes ? codeModel.ref(GenericData.Record.class)
+                        : codeModel.ref(schema.getFullName());
+                break;
 
-        case ARRAY:
-            if (abstractType) {
-                outputClass = codeModel.ref(List.class);
-            } else {
-                if (useGenericTypes) {
-                    outputClass = codeModel.ref(GenericData.Array.class);
+            case ARRAY:
+                if (abstractType) {
+                    outputClass = codeModel.ref(List.class);
                 } else {
-                    outputClass = codeModel.ref(ArrayList.class);
+                    if (useGenericTypes) {
+                        outputClass = codeModel.ref(GenericData.Array.class);
+                    } else {
+                        outputClass = codeModel.ref(ArrayList.class);
+                    }
                 }
-            }
-            if (!rawType) {
-                outputClass = outputClass.narrow(elementClassFromArraySchema(schema));
-            }
-            break;
-        case MAP:
-            if (!abstractType) {
-                outputClass = codeModel.ref(HashMap.class);
-            } else {
-                outputClass = codeModel.ref(Map.class);
-            }
-            if (!rawType) {
-                outputClass = outputClass.narrow(keyClassFromMapSchema(schema), valueClassFromMapSchema(schema));
-            }
-            break;
-        case UNION:
-            outputClass = classFromUnionSchema(schema);
-            break;
-        case ENUM:
-            outputClass = useGenericTypes ? codeModel.ref(GenericData.EnumSymbol.class)
-                    : codeModel.ref(schema.getFullName());
-            break;
-        case FIXED:
-            outputClass = useGenericTypes ? codeModel.ref(GenericData.Fixed.class)
-                    : codeModel.ref(schema.getFullName());
-            break;
-        case BOOLEAN:
-            outputClass = codeModel.ref(Boolean.class);
-            break;
-        case DOUBLE:
-            outputClass = codeModel.ref(Double.class);
-            break;
-        case FLOAT:
-            outputClass = codeModel.ref(Float.class);
-            break;
-        case INT:
-            outputClass = codeModel.ref(Integer.class);
-            break;
-        case LONG:
-            outputClass = codeModel.ref(Long.class);
-            break;
-        case STRING:
-            if (isStringable(schema) && !useGenericTypes) {
-                outputClass = codeModel.ref(schema.getProp(SpecificData.CLASS_PROP));
-                extendExceptionsFromStringable(schema.getProp(SpecificData.CLASS_PROP));
-            } else {
-                outputClass = codeModel.ref(String.class);
-            }
-            break;
-        case BYTES:
-            outputClass = codeModel.ref(ByteBuffer.class);
-            break;
-        default:
-            throw new SchemaAssistantException("Incorrect request for " + schema.getType().getName() + " class!");
+                if (!rawType) {
+                    outputClass = outputClass.narrow(elementClassFromArraySchema(schema));
+                }
+                break;
+            case MAP:
+                if (!abstractType) {
+                    outputClass = codeModel.ref(HashMap.class);
+                } else {
+                    outputClass = codeModel.ref(Map.class);
+                }
+                if (!rawType) {
+                    outputClass = outputClass.narrow(keyClassFromMapSchema(schema), valueClassFromMapSchema(schema));
+                }
+                break;
+            case UNION:
+                outputClass = classFromUnionSchema(schema);
+                break;
+            case ENUM:
+                outputClass = useGenericTypes ? codeModel.ref(GenericData.EnumSymbol.class)
+                        : codeModel.ref(schema.getFullName());
+                break;
+            case FIXED:
+                outputClass = useGenericTypes ? codeModel.ref(GenericData.Fixed.class)
+                        : codeModel.ref(schema.getFullName());
+                break;
+            case BOOLEAN:
+                outputClass = codeModel.ref(Boolean.class);
+                break;
+            case DOUBLE:
+                outputClass = codeModel.ref(Double.class);
+                break;
+            case FLOAT:
+                outputClass = codeModel.ref(Float.class);
+                break;
+            case INT:
+                outputClass = codeModel.ref(Integer.class);
+                break;
+            case LONG:
+                outputClass = codeModel.ref(Long.class);
+                break;
+            case STRING:
+
+                if (isStringable(schema) && !useGenericTypes) {
+                    outputClass = codeModel.ref(schema.getProp(SpecificData.CLASS_PROP));
+                    extendExceptionsFromStringable(schema.getProp(SpecificData.CLASS_PROP));
+                } else {
+                    if (useCharSequence) {
+                        outputClass = codeModel.ref(CharSequence.class);
+                    } else if ("String".equals(schema.getProp(GenericData.STRING_PROP))) {
+                        outputClass = codeModel.ref(String.class);
+                    } else {
+                        outputClass = codeModel.ref(Utf8.class);
+                    }
+                }
+                break;
+            case BYTES:
+                outputClass = codeModel.ref(ByteBuffer.class);
+                break;
+            default:
+                throw new SchemaAssistantException("Incorrect request for " + schema.getType().getName() + " class!");
         }
 
         return outputClass;
@@ -229,24 +248,24 @@ public class SchemaAssistant {
     /* Complex type here means type that it have to handle other types inside itself. */
     public static boolean isComplexType(Schema schema) {
         switch (schema.getType()) {
-        case MAP:
-        case RECORD:
-        case ARRAY:
-        case UNION:
-            return true;
-        default:
-            return false;
+            case MAP:
+            case RECORD:
+            case ARRAY:
+            case UNION:
+                return true;
+            default:
+                return false;
         }
     }
 
     public static boolean isNamedType(Schema schema) {
         switch (schema.getType()) {
-        case RECORD:
-        case ENUM:
-        case FIXED:
-            return true;
-        default:
-            return false;
+            case RECORD:
+            case ENUM:
+            case FIXED:
+                return true;
+            default:
+                return false;
         }
     }
 

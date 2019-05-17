@@ -1,17 +1,14 @@
 package com.rtbhouse.utils.avro;
 
-import static com.rtbhouse.utils.avro.FastSerdeTestsSupport.addAliases;
-import static com.rtbhouse.utils.avro.FastSerdeTestsSupport.createArrayFieldSchema;
-import static com.rtbhouse.utils.avro.FastSerdeTestsSupport.createEnumSchema;
-import static com.rtbhouse.utils.avro.FastSerdeTestsSupport.createField;
-import static com.rtbhouse.utils.avro.FastSerdeTestsSupport.createFixedSchema;
-import static com.rtbhouse.utils.avro.FastSerdeTestsSupport.createMapFieldSchema;
-import static com.rtbhouse.utils.avro.FastSerdeTestsSupport.createPrimitiveFieldSchema;
-import static com.rtbhouse.utils.avro.FastSerdeTestsSupport.createPrimitiveUnionFieldSchema;
-import static com.rtbhouse.utils.avro.FastSerdeTestsSupport.createRecord;
-import static com.rtbhouse.utils.avro.FastSerdeTestsSupport.createUnionField;
-import static com.rtbhouse.utils.avro.FastSerdeTestsSupport.createUnionSchema;
-import static com.rtbhouse.utils.avro.FastSerdeTestsSupport.serializeGeneric;
+import org.apache.avro.Schema;
+import org.apache.avro.generic.GenericData;
+import org.apache.avro.generic.GenericRecord;
+import org.apache.avro.generic.GenericRecordBuilder;
+import org.apache.avro.io.Decoder;
+import org.apache.avro.util.Utf8;
+import org.junit.Assert;
+import org.junit.Before;
+import org.junit.Test;
 
 import java.io.File;
 import java.net.URL;
@@ -25,14 +22,18 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
-import org.apache.avro.Schema;
-import org.apache.avro.generic.GenericData;
-import org.apache.avro.generic.GenericRecord;
-import org.apache.avro.generic.GenericRecordBuilder;
-import org.apache.avro.io.Decoder;
-import org.junit.Assert;
-import org.junit.Before;
-import org.junit.Test;
+import static com.rtbhouse.utils.avro.FastSerdeTestsSupport.addAliases;
+import static com.rtbhouse.utils.avro.FastSerdeTestsSupport.createArrayFieldSchema;
+import static com.rtbhouse.utils.avro.FastSerdeTestsSupport.createEnumSchema;
+import static com.rtbhouse.utils.avro.FastSerdeTestsSupport.createField;
+import static com.rtbhouse.utils.avro.FastSerdeTestsSupport.createFixedSchema;
+import static com.rtbhouse.utils.avro.FastSerdeTestsSupport.createMapFieldSchema;
+import static com.rtbhouse.utils.avro.FastSerdeTestsSupport.createPrimitiveFieldSchema;
+import static com.rtbhouse.utils.avro.FastSerdeTestsSupport.createPrimitiveUnionFieldSchema;
+import static com.rtbhouse.utils.avro.FastSerdeTestsSupport.createRecord;
+import static com.rtbhouse.utils.avro.FastSerdeTestsSupport.createUnionField;
+import static com.rtbhouse.utils.avro.FastSerdeTestsSupport.createUnionSchema;
+import static com.rtbhouse.utils.avro.FastSerdeTestsSupport.serializeGeneric;
 
 public class FastGenericDeserializerGeneratorTest {
 
@@ -44,18 +45,22 @@ public class FastGenericDeserializerGeneratorTest {
         Path tempPath = Files.createTempDirectory("generated");
         tempDir = tempPath.toFile();
 
-        classLoader = URLClassLoader.newInstance(new URL[] { tempDir.toURI().toURL() },
+        classLoader = URLClassLoader.newInstance(new URL[]{tempDir.toURI().toURL()},
                 FastGenericDeserializerGeneratorTest.class.getClassLoader());
     }
 
     @Test
     public void shouldReadPrimitives() {
         // given
+        Schema javaLangStringSchema = Schema.create(Schema.Type.STRING);
+        GenericData.setStringType(javaLangStringSchema, GenericData.StringType.String);
         Schema recordSchema = createRecord("testRecord",
                 createField("testInt", Schema.create(Schema.Type.INT)),
                 createPrimitiveUnionFieldSchema("testIntUnion", Schema.Type.INT),
                 createField("testString", Schema.create(Schema.Type.STRING)),
                 createPrimitiveUnionFieldSchema("testStringUnion", Schema.Type.STRING),
+                createField("testJavaString", javaLangStringSchema),
+                createUnionField("testJavaStringUnion", javaLangStringSchema),
                 createField("testLong", Schema.create(Schema.Type.LONG)),
                 createPrimitiveUnionFieldSchema("testLongUnion", Schema.Type.LONG),
                 createField("testDouble", Schema.create(Schema.Type.DOUBLE)),
@@ -72,16 +77,18 @@ public class FastGenericDeserializerGeneratorTest {
         builder.set("testIntUnion", 1);
         builder.set("testString", "aaa");
         builder.set("testStringUnion", "aaa");
-        builder.set("testLong", 1l);
-        builder.set("testLongUnion", 1l);
+        builder.set("testJavaString", "aaa");
+        builder.set("testJavaStringUnion", "aaa");
+        builder.set("testLong", 1L);
+        builder.set("testLongUnion", 1L);
         builder.set("testDouble", 1.0);
         builder.set("testDoubleUnion", 1.0);
         builder.set("testFloat", 1.0f);
         builder.set("testFloatUnion", 1.0f);
         builder.set("testBoolean", true);
         builder.set("testBooleanUnion", true);
-        builder.set("testBytes", ByteBuffer.wrap(new byte[] { 0x01, 0x02 }));
-        builder.set("testBytesUnion", ByteBuffer.wrap(new byte[] { 0x01, 0x02 }));
+        builder.set("testBytes", ByteBuffer.wrap(new byte[]{0x01, 0x02}));
+        builder.set("testBytesUnion", ByteBuffer.wrap(new byte[]{0x01, 0x02}));
 
         // when
         GenericRecord record = deserializeGenericFast(recordSchema, recordSchema, serializeGeneric(builder.build()));
@@ -89,22 +96,25 @@ public class FastGenericDeserializerGeneratorTest {
         // then
         Assert.assertEquals(1, record.get("testInt"));
         Assert.assertEquals(1, record.get("testIntUnion"));
-        Assert.assertEquals("aaa", record.get("testString"));
-        Assert.assertEquals("aaa", record.get("testStringUnion"));
-        Assert.assertEquals(1l, record.get("testLong"));
-        Assert.assertEquals(1l, record.get("testLongUnion"));
+        Assert.assertEquals("aaa", record.get("testString").toString());
+        Assert.assertEquals("aaa", record.get("testStringUnion").toString());
+        Assert.assertEquals("aaa", record.get("testJavaString"));
+        Assert.assertEquals("aaa", record.get("testJavaStringUnion"));
+        Assert.assertEquals(1L, record.get("testLong"));
+        Assert.assertEquals(1L, record.get("testLongUnion"));
         Assert.assertEquals(1.0, record.get("testDouble"));
         Assert.assertEquals(1.0, record.get("testDoubleUnion"));
         Assert.assertEquals(1.0f, record.get("testFloat"));
         Assert.assertEquals(1.0f, record.get("testFloatUnion"));
         Assert.assertEquals(true, record.get("testBoolean"));
         Assert.assertEquals(true, record.get("testBooleanUnion"));
-        Assert.assertEquals(ByteBuffer.wrap(new byte[] { 0x01, 0x02 }), record.get("testBytes"));
-        Assert.assertEquals(ByteBuffer.wrap(new byte[] { 0x01, 0x02 }), record.get("testBytesUnion"));
+        Assert.assertEquals(ByteBuffer.wrap(new byte[]{0x01, 0x02}), record.get("testBytes"));
+        Assert.assertEquals(ByteBuffer.wrap(new byte[]{0x01, 0x02}), record.get("testBytesUnion"));
 
     }
 
     @Test
+    @SuppressWarnings("unchecked")
     public void shouldReadFixed() {
         // given
         Schema fixedSchema = createFixedSchema("testFixed", 2);
@@ -113,28 +123,29 @@ public class FastGenericDeserializerGeneratorTest {
                 createArrayFieldSchema("testFixedUnionArray", createUnionSchema(fixedSchema)));
 
         GenericRecordBuilder builder = new GenericRecordBuilder(recordSchema);
-        builder.set("testFixed", new GenericData.Fixed(fixedSchema, new byte[] { 0x01, 0x02 }));
-        builder.set("testFixedUnion", new GenericData.Fixed(fixedSchema, new byte[] { 0x03, 0x04 }));
-        builder.set("testFixedArray", Arrays.asList(new GenericData.Fixed(fixedSchema, new byte[] { 0x05, 0x06 })));
+        builder.set("testFixed", new GenericData.Fixed(fixedSchema, new byte[]{0x01, 0x02}));
+        builder.set("testFixedUnion", new GenericData.Fixed(fixedSchema, new byte[]{0x03, 0x04}));
+        builder.set("testFixedArray", Arrays.asList(new GenericData.Fixed(fixedSchema, new byte[]{0x05, 0x06})));
         builder.set("testFixedUnionArray",
-                Arrays.asList(new GenericData.Fixed(fixedSchema, new byte[] { 0x07, 0x08 })));
+                Arrays.asList(new GenericData.Fixed(fixedSchema, new byte[]{0x07, 0x08})));
 
         // when
         GenericRecord record = deserializeGenericFast(recordSchema, recordSchema, serializeGeneric(builder.build()));
 
         // then
-        Assert.assertArrayEquals(new byte[] { 0x01, 0x02 }, ((GenericData.Fixed) record.get("testFixed")).bytes());
-        Assert.assertArrayEquals(new byte[] { 0x03, 0x04 }, ((GenericData.Fixed) record.get("testFixedUnion")).bytes());
-        Assert.assertArrayEquals(new byte[] { 0x05, 0x06 },
+        Assert.assertArrayEquals(new byte[]{0x01, 0x02}, ((GenericData.Fixed) record.get("testFixed")).bytes());
+        Assert.assertArrayEquals(new byte[]{0x03, 0x04}, ((GenericData.Fixed) record.get("testFixedUnion")).bytes());
+        Assert.assertArrayEquals(new byte[]{0x05, 0x06},
                 ((List<GenericData.Fixed>) record.get("testFixedArray")).get(0).bytes());
-        Assert.assertArrayEquals(new byte[] { 0x07, 0x08 },
+        Assert.assertArrayEquals(new byte[]{0x07, 0x08},
                 ((List<GenericData.Fixed>) record.get("testFixedUnionArray")).get(0).bytes());
     }
 
     @Test
+    @SuppressWarnings("unchecked")
     public void shouldReadEnum() {
         // given
-        Schema enumSchema = createEnumSchema("testEnum", new String[] { "A", "B" });
+        Schema enumSchema = createEnumSchema("testEnum", new String[]{"A", "B"});
         Schema recordSchema = createRecord("testRecord", createField("testEnum", enumSchema),
                 createUnionField("testEnumUnion", enumSchema), createArrayFieldSchema("testEnumArray", enumSchema),
                 createArrayFieldSchema("testEnumUnionArray", createUnionSchema(enumSchema)));
@@ -156,9 +167,10 @@ public class FastGenericDeserializerGeneratorTest {
     }
 
     @Test
+    @SuppressWarnings("unchecked")
     public void shouldReadPermutatedEnum() {
         // given
-        Schema enumSchema = createEnumSchema("testEnum", new String[] { "A", "B", "C", "D", "E" });
+        Schema enumSchema = createEnumSchema("testEnum", new String[]{"A", "B", "C", "D", "E"});
         Schema recordSchema = createRecord("testRecord", createField("testEnum", enumSchema),
                 createUnionField("testEnumUnion", enumSchema), createArrayFieldSchema("testEnumArray", enumSchema),
                 createArrayFieldSchema("testEnumUnionArray", createUnionSchema(enumSchema)));
@@ -169,7 +181,7 @@ public class FastGenericDeserializerGeneratorTest {
         builder.set("testEnumArray", Arrays.asList(new GenericData.EnumSymbol(enumSchema, "C")));
         builder.set("testEnumUnionArray", Arrays.asList(new GenericData.EnumSymbol(enumSchema, "D")));
 
-        Schema enumSchema1 = createEnumSchema("testEnum", new String[] { "B", "A", "D", "E", "C" });
+        Schema enumSchema1 = createEnumSchema("testEnum", new String[]{"B", "A", "D", "E", "C"});
         Schema recordSchema1 = createRecord("testRecord", createField("testEnum", enumSchema1),
                 createUnionField("testEnumUnion", enumSchema1), createArrayFieldSchema("testEnumArray", enumSchema1),
                 createArrayFieldSchema("testEnumUnionArray", createUnionSchema(enumSchema1)));
@@ -187,13 +199,13 @@ public class FastGenericDeserializerGeneratorTest {
     @Test(expected = FastDeserializerGeneratorException.class)
     public void shouldNotReadStrippedEnum() {
         // given
-        Schema enumSchema = createEnumSchema("testEnum", new String[] { "A", "B", "C" });
+        Schema enumSchema = createEnumSchema("testEnum", new String[]{"A", "B", "C"});
         Schema recordSchema = createRecord("testRecord", createField("testEnum", enumSchema));
 
         GenericRecordBuilder builder = new GenericRecordBuilder(recordSchema);
         builder.set("testEnum", new GenericData.EnumSymbol(enumSchema, "C"));
 
-        Schema enumSchema1 = createEnumSchema("testEnum", new String[] { "A", "B" });
+        Schema enumSchema1 = createEnumSchema("testEnum", new String[]{"A", "B"});
         Schema recordSchema1 = createRecord("testRecord", createField("testEnum", enumSchema1));
 
         // when
@@ -221,14 +233,15 @@ public class FastGenericDeserializerGeneratorTest {
         GenericRecord record = deserializeGenericFast(recordSchema, recordSchema, serializeGeneric(builder.build()));
 
         // then
-        Assert.assertEquals("abc", ((GenericRecord) record.get("record")).get("subField"));
+        Assert.assertEquals("abc", ((GenericRecord) record.get("record")).get("subField").toString());
         Assert.assertEquals(subRecordSchema.hashCode(), ((GenericRecord) record.get("record")).getSchema().hashCode());
-        Assert.assertEquals("abc", ((GenericRecord) record.get("record1")).get("subField"));
+        Assert.assertEquals("abc", ((GenericRecord) record.get("record1")).get("subField").toString());
         Assert.assertEquals(subRecordSchema.hashCode(), ((GenericRecord) record.get("record1")).getSchema().hashCode());
-        Assert.assertEquals("abc", record.get("field"));
+        Assert.assertEquals("abc", record.get("field").toString());
     }
 
     @Test
+    @SuppressWarnings("unchecked")
     public void shouldReadSubRecordCollectionsField() {
         // given
         Schema subRecordSchema = createRecord("subRecord",
@@ -256,16 +269,17 @@ public class FastGenericDeserializerGeneratorTest {
 
         // then
         Assert.assertEquals("abc",
-                ((List<GenericData.Record>) record.get("recordsArray")).get(0).get("subField"));
+                ((List<GenericData.Record>) record.get("recordsArray")).get(0).get("subField").toString());
         Assert.assertEquals("abc",
-                ((List<GenericData.Record>) record.get("recordsArrayUnion")).get(0).get("subField"));
+                ((List<GenericData.Record>) record.get("recordsArrayUnion")).get(0).get("subField").toString());
         Assert.assertEquals("abc",
-                ((Map<String, GenericData.Record>) record.get("recordsMap")).get("1").get("subField"));
+                ((Map<Utf8, GenericData.Record>) record.get("recordsMap")).get(new Utf8("1")).get("subField").toString());
         Assert.assertEquals("abc",
-                ((Map<String, GenericData.Record>) record.get("recordsMapUnion")).get("1").get("subField"));
+                ((Map<Utf8, GenericData.Record>) record.get("recordsMapUnion")).get(new Utf8("1")).get("subField").toString());
     }
 
     @Test
+    @SuppressWarnings("unchecked")
     public void shouldReadSubRecordComplexCollectionsField() {
         // given
         Schema subRecordSchema = createRecord("subRecord",
@@ -304,15 +318,15 @@ public class FastGenericDeserializerGeneratorTest {
 
         // then
         Assert.assertEquals("abc",
-                ((List<Map<String, GenericRecord>>) record.get("recordsArrayMap")).get(0).get("1").get("subField"));
+                ((List<Map<Utf8, GenericRecord>>) record.get("recordsArrayMap")).get(0).get(new Utf8("1")).get("subField").toString());
         Assert.assertEquals("abc",
-                ((Map<String, List<GenericRecord>>) record.get("recordsMapArray")).get("1").get(0).get("subField"));
+                ((Map<Utf8, List<GenericRecord>>) record.get("recordsMapArray")).get(new Utf8("1")).get(0).get("subField").toString());
         Assert.assertEquals("abc",
-                ((List<Map<String, GenericRecord>>) record.get("recordsArrayMapUnion")).get(0).get("1")
-                        .get("subField"));
+                ((List<Map<Utf8, GenericRecord>>) record.get("recordsArrayMapUnion")).get(0).get(new Utf8("1"))
+                        .get("subField").toString());
         Assert.assertEquals("abc",
-                ((Map<String, List<GenericRecord>>) record.get("recordsMapArrayUnion")).get("1").get(0)
-                        .get("subField"));
+                ((Map<Utf8, List<GenericRecord>>) record.get("recordsMapArrayUnion")).get(new Utf8("1")).get(0)
+                        .get("subField").toString());
     }
 
     @Test
@@ -334,11 +348,12 @@ public class FastGenericDeserializerGeneratorTest {
         GenericRecord record = deserializeGenericFast(record1Schema, record2Schema, serializeGeneric(builder.build()));
 
         // then
-        Assert.assertEquals("abc", record.get("testString"));
-        Assert.assertEquals("def", record.get("testStringUnionAlias"));
+        Assert.assertEquals("abc", record.get("testString").toString());
+        Assert.assertEquals("def", record.get("testStringUnionAlias").toString());
     }
 
     @Test
+    @SuppressWarnings("unchecked")
     public void shouldSkipRemovedField() {
         // given
         Schema subRecord1Schema = createRecord("subRecord",
@@ -382,13 +397,13 @@ public class FastGenericDeserializerGeneratorTest {
         GenericRecord record = deserializeGenericFast(record1Schema, record2Schema, serializeGeneric(builder.build()));
 
         // then
-        Assert.assertEquals("abc", record.get("testNotRemoved"));
+        Assert.assertEquals("abc", record.get("testNotRemoved").toString());
         Assert.assertNull(record.get("testRemoved"));
-        Assert.assertEquals("ghi", record.get("testNotRemoved2"));
-        Assert.assertEquals("ghi", ((GenericRecord) record.get("subRecord")).get("testNotRemoved2"));
-        Assert.assertEquals("ghi", ((List<GenericRecord>) record.get("subRecordArray")).get(0).get("testNotRemoved2"));
+        Assert.assertEquals("ghi", record.get("testNotRemoved2").toString());
+        Assert.assertEquals("ghi", ((GenericRecord) record.get("subRecord")).get("testNotRemoved2").toString());
+        Assert.assertEquals("ghi", ((List<GenericRecord>) record.get("subRecordArray")).get(0).get("testNotRemoved2").toString());
         Assert.assertEquals("ghi",
-                ((Map<String, GenericRecord>) record.get("subRecordMap")).get("1").get("testNotRemoved2"));
+                ((Map<Utf8, GenericRecord>) record.get("subRecordMap")).get(new Utf8("1")).get("testNotRemoved2").toString());
     }
 
     @Test
@@ -429,10 +444,10 @@ public class FastGenericDeserializerGeneratorTest {
         GenericRecord record = deserializeGenericFast(record1Schema, record2Schema, serializeGeneric(builder.build()));
 
         // then
-        Assert.assertEquals("abc", ((GenericRecord) record.get("subRecord1")).get("test1"));
-        Assert.assertEquals("def", ((GenericRecord) record.get("subRecord1")).get("test2"));
-        Assert.assertEquals("abc", ((GenericRecord) record.get("subRecord4")).get("test1"));
-        Assert.assertEquals("def", ((GenericRecord) record.get("subRecord4")).get("test2"));
+        Assert.assertEquals("abc", ((GenericRecord) record.get("subRecord1")).get("test1").toString());
+        Assert.assertEquals("def", ((GenericRecord) record.get("subRecord1")).get("test2").toString());
+        Assert.assertEquals("abc", ((GenericRecord) record.get("subRecord4")).get("test1").toString());
+        Assert.assertEquals("def", ((GenericRecord) record.get("subRecord4")).get("test2").toString());
     }
 
     @Test
@@ -473,8 +488,8 @@ public class FastGenericDeserializerGeneratorTest {
         GenericRecord record = deserializeGenericFast(record1Schema, record2Schema, serializeGeneric(builder.build()));
 
         // then
-        Assert.assertEquals("abc", ((GenericRecord) record.get("subRecord")).get("test1"));
-        Assert.assertEquals("def", ((GenericRecord) record.get("subRecord")).get("test4"));
+        Assert.assertEquals("abc", ((GenericRecord) record.get("subRecord")).get("test1").toString());
+        Assert.assertEquals("def", ((GenericRecord) record.get("subRecord")).get("test4").toString());
     }
 
     @Test
@@ -498,7 +513,7 @@ public class FastGenericDeserializerGeneratorTest {
         GenericRecord record = deserializeGenericFast(recordSchema, recordSchema, serializeGeneric(builder.build()));
 
         // then
-        Assert.assertEquals("abc", ((GenericData.Record) record.get("union")).get("subField"));
+        Assert.assertEquals("abc", ((GenericData.Record) record.get("union")).get("subField").toString());
 
         // given
         builder = new GenericRecordBuilder(recordSchema);
@@ -508,7 +523,7 @@ public class FastGenericDeserializerGeneratorTest {
         record = deserializeGenericFast(recordSchema, recordSchema, serializeGeneric(builder.build()));
 
         // then
-        Assert.assertEquals("abc", record.get("union"));
+        Assert.assertEquals("abc", record.get("union").toString());
 
         // given
         builder = new GenericRecordBuilder(recordSchema);
@@ -543,8 +558,8 @@ public class FastGenericDeserializerGeneratorTest {
 
         // then
         Assert.assertEquals(2, array.size());
-        Assert.assertEquals("abc", array.get(0).get("field"));
-        Assert.assertEquals("abc", array.get(1).get("field"));
+        Assert.assertEquals("abc", array.get(0).get("field").toString());
+        Assert.assertEquals("abc", array.get(1).get("field").toString());
 
         // given
 
@@ -562,9 +577,114 @@ public class FastGenericDeserializerGeneratorTest {
 
         // then
         Assert.assertEquals(2, array.size());
-        Assert.assertEquals("abc", array.get(0).get("field"));
-        Assert.assertEquals("abc", array.get(1).get("field"));
+        Assert.assertEquals("abc", array.get(0).get("field").toString());
+        Assert.assertEquals("abc", array.get(1).get("field").toString());
     }
+
+    @Test
+    public void shouldReadArrayOfPrimitives() {
+        // given
+        Schema stringArraySchema = Schema.createArray(Schema.create(Schema.Type.STRING));
+
+        GenericData.Array<String> stringArray = new GenericData.Array<>(0, stringArraySchema);
+        stringArray.add("aaa");
+        stringArray.add("abc");
+
+        Schema intArraySchema = Schema.createArray(Schema.create(Schema.Type.INT));
+
+        GenericData.Array<Integer> intArray = new GenericData.Array<>(0, intArraySchema);
+        intArray.add(1);
+        intArray.add(2);
+
+        Schema longArraySchema = Schema.createArray(Schema.create(Schema.Type.LONG));
+
+        GenericData.Array<Long> longArray = new GenericData.Array<>(0, longArraySchema);
+        longArray.add(1L);
+        longArray.add(2L);
+
+        Schema doubleArraySchema = Schema.createArray(Schema.create(Schema.Type.DOUBLE));
+
+        GenericData.Array<Double> doubleArray = new GenericData.Array<>(0, doubleArraySchema);
+        doubleArray.add(1.0);
+        doubleArray.add(2.0);
+
+        Schema floatArraySchema = Schema.createArray(Schema.create(Schema.Type.FLOAT));
+
+        GenericData.Array<Float> floatArray = new GenericData.Array<>(0, floatArraySchema);
+        floatArray.add(1.0f);
+        floatArray.add(2.0f);
+
+        Schema bytesArraySchema = Schema.createArray(Schema.create(Schema.Type.BYTES));
+
+        GenericData.Array<ByteBuffer> bytesArray = new GenericData.Array<>(0, bytesArraySchema);
+        bytesArray.add(ByteBuffer.wrap(new byte[]{0x01}));
+        bytesArray.add(ByteBuffer.wrap(new byte[]{0x02}));
+
+        // when
+        GenericData.Array<Utf8> resultStringArray = deserializeGenericFast(stringArraySchema, stringArraySchema,
+                serializeGeneric(stringArray));
+
+        GenericData.Array<Integer> resultIntegerArray = deserializeGenericFast(intArraySchema, intArraySchema,
+                serializeGeneric(intArray));
+
+        GenericData.Array<Long> resultLongArray = deserializeGenericFast(longArraySchema, longArraySchema,
+                serializeGeneric(longArray));
+
+        GenericData.Array<Double> resultDoubleArray = deserializeGenericFast(doubleArraySchema, doubleArraySchema,
+                serializeGeneric(doubleArray));
+
+        GenericData.Array<Float> resultFloatArray = deserializeGenericFast(floatArraySchema, floatArraySchema,
+                serializeGeneric(floatArray));
+
+        GenericData.Array<ByteBuffer> resultBytesArray = deserializeGenericFast(bytesArraySchema, bytesArraySchema,
+                serializeGeneric(bytesArray));
+
+        // then
+        Assert.assertEquals(2, resultStringArray.size());
+        Assert.assertEquals("aaa", resultStringArray.get(0).toString());
+        Assert.assertEquals("abc", resultStringArray.get(1).toString());
+
+        Assert.assertEquals(2, resultIntegerArray.size());
+        Assert.assertEquals(Integer.valueOf(1), resultIntegerArray.get(0));
+        Assert.assertEquals(Integer.valueOf(2), resultIntegerArray.get(1));
+
+        Assert.assertEquals(2, resultLongArray.size());
+        Assert.assertEquals(Long.valueOf(1L), resultLongArray.get(0));
+        Assert.assertEquals(Long.valueOf(2L), resultLongArray.get(1));
+
+        Assert.assertEquals(2, resultDoubleArray.size());
+        Assert.assertEquals(Double.valueOf(1.0), resultDoubleArray.get(0));
+        Assert.assertEquals(Double.valueOf(2.0), resultDoubleArray.get(1));
+
+        Assert.assertEquals(2, resultFloatArray.size());
+        Assert.assertEquals(Float.valueOf(1f), resultFloatArray.get(0));
+        Assert.assertEquals(Float.valueOf(2f), resultFloatArray.get(1));
+
+        Assert.assertEquals(2, resultBytesArray.size());
+        Assert.assertEquals(0x01, resultBytesArray.get(0).get());
+        Assert.assertEquals(0x02, resultBytesArray.get(1).get());
+    }
+
+    @Test
+    public void shouldReadArrayOfJavaStrings() {
+        // given
+        Schema javaStringSchema = Schema.create(Schema.Type.STRING);
+        GenericData.setStringType(javaStringSchema, GenericData.StringType.String);
+        Schema javaStringArraySchema = Schema.createArray(javaStringSchema);
+
+        GenericData.Array<String> javaStringArray = new GenericData.Array<>(0, javaStringArraySchema);
+        javaStringArray.add("aaa");
+        javaStringArray.add("abc");
+
+        GenericData.Array<String> resultJavaStringArray = deserializeGenericFast(javaStringArraySchema, javaStringArraySchema,
+                serializeGeneric(javaStringArray));
+
+        // then
+        Assert.assertEquals(2, resultJavaStringArray.size());
+        Assert.assertEquals("aaa", resultJavaStringArray.get(0));
+        Assert.assertEquals("abc", resultJavaStringArray.get(1));
+    }
+
 
     @Test
     public void shouldReadMapOfRecords() {
@@ -582,31 +702,155 @@ public class FastGenericDeserializerGeneratorTest {
         recordsMap.put("2", subRecordBuilder.build());
 
         // when
-        Map<String, GenericRecord> map = deserializeGenericFast(mapRecordSchema, mapRecordSchema,
+        Map<Utf8, GenericRecord> map = deserializeGenericFast(mapRecordSchema, mapRecordSchema,
                 serializeGeneric(recordsMap, mapRecordSchema));
 
         // then
         Assert.assertEquals(2, map.size());
-        Assert.assertEquals("abc", map.get("1").get("field"));
-        Assert.assertEquals("abc", map.get("2").get("field"));
+        Assert.assertEquals("abc", map.get(new Utf8("1")).get("field").toString());
+        Assert.assertEquals("abc", map.get(new Utf8("2")).get("field").toString());
 
         // given
         mapRecordSchema = Schema.createMap(createUnionSchema(recordSchema));
-
-        subRecordBuilder = new GenericRecordBuilder(recordSchema);
-        subRecordBuilder.set("field", "abc");
-
-        recordsMap = new HashMap<>();
-        recordsMap.put("1", subRecordBuilder.build());
-        recordsMap.put("2", subRecordBuilder.build());
 
         // when
         map = deserializeGenericFast(mapRecordSchema, mapRecordSchema, serializeGeneric(recordsMap, mapRecordSchema));
 
         // then
         Assert.assertEquals(2, map.size());
-        Assert.assertEquals("abc", map.get("1").get("field"));
-        Assert.assertEquals("abc", map.get("2").get("field"));
+        Assert.assertEquals("abc", map.get(new Utf8("1")).get("field").toString());
+        Assert.assertEquals("abc", map.get(new Utf8("2")).get("field").toString());
+    }
+
+    @Test
+    public void shouldReadMapOfPrimitives() {
+        // given
+        Schema stringMapSchema = Schema.createMap(Schema.create(Schema.Type.STRING));
+
+        Map<String, String> stringMap = new HashMap<>(0);
+        stringMap.put("1", "abc");
+        stringMap.put("2", "aaa");
+
+        Schema intMapSchema = Schema.createMap(Schema.create(Schema.Type.INT));
+
+        Map<String, Integer> intMap = new HashMap<>(0);
+        intMap.put("1", 1);
+        intMap.put("2", 2);
+
+        Schema longMapSchema = Schema.createMap(Schema.create(Schema.Type.LONG));
+
+        Map<String, Long> longMap = new HashMap<>(0);
+        longMap.put("1", 1L);
+        longMap.put("2", 2L);
+
+        Schema doubleMapSchema = Schema.createMap(Schema.create(Schema.Type.DOUBLE));
+
+        Map<String, Double> doubleMap = new HashMap<>(0);
+        doubleMap.put("1", 1.0);
+        doubleMap.put("2", 2.0);
+
+        Schema floatMapSchema = Schema.createMap(Schema.create(Schema.Type.FLOAT));
+
+        Map<String, Float> floatMap = new HashMap<>(0);
+        floatMap.put("1", 1.0f);
+        floatMap.put("2", 2.0f);
+
+        Schema bytesMapSchema = Schema.createMap(Schema.create(Schema.Type.BYTES));
+
+        Map<String, ByteBuffer> bytesMap = new HashMap<>(0);
+        bytesMap.put("1", ByteBuffer.wrap(new byte[]{0x01}));
+        bytesMap.put("2", ByteBuffer.wrap(new byte[]{0x02}));
+
+        // when
+        Map<Utf8, Utf8> resultStringMap = deserializeGenericFast(stringMapSchema, stringMapSchema,
+                serializeGeneric(stringMap, stringMapSchema));
+
+        Map<Utf8, Integer> resultIntegerMap = deserializeGenericFast(intMapSchema, intMapSchema,
+                serializeGeneric(intMap, intMapSchema));
+
+        Map<Utf8, Long> resultLongMap = deserializeGenericFast(longMapSchema, longMapSchema,
+                serializeGeneric(longMap, longMapSchema));
+
+        Map<Utf8, Double> resultDoubleMap = deserializeGenericFast(doubleMapSchema, doubleMapSchema,
+                serializeGeneric(doubleMap, doubleMapSchema));
+
+        Map<Utf8, Float> resultFloatMap = deserializeGenericFast(floatMapSchema, floatMapSchema,
+                serializeGeneric(floatMap, floatMapSchema));
+
+        Map<Utf8, ByteBuffer> resultBytesMap = deserializeGenericFast(bytesMapSchema, bytesMapSchema,
+                serializeGeneric(bytesMap, bytesMapSchema));
+
+        // then
+        Assert.assertEquals(2, resultStringMap.size());
+        Assert.assertEquals("abc", resultStringMap.get(new Utf8("1")).toString());
+        Assert.assertEquals("aaa", resultStringMap.get(new Utf8("2")).toString());
+
+        Assert.assertEquals(2, resultIntegerMap.size());
+        Assert.assertEquals(Integer.valueOf(1), resultIntegerMap.get(new Utf8("1")));
+        Assert.assertEquals(Integer.valueOf(2), resultIntegerMap.get(new Utf8("2")));
+
+        Assert.assertEquals(2, resultLongMap.size());
+        Assert.assertEquals(Long.valueOf(1L), resultLongMap.get(new Utf8("1")));
+        Assert.assertEquals(Long.valueOf(2L), resultLongMap.get(new Utf8("2")));
+
+        Assert.assertEquals(2, resultDoubleMap.size());
+        Assert.assertEquals(Double.valueOf(1.0), resultDoubleMap.get(new Utf8("1")));
+        Assert.assertEquals(Double.valueOf(2.0), resultDoubleMap.get(new Utf8("2")));
+
+        Assert.assertEquals(2, resultFloatMap.size());
+        Assert.assertEquals(Float.valueOf(1f), resultFloatMap.get(new Utf8("1")));
+        Assert.assertEquals(Float.valueOf(2f), resultFloatMap.get(new Utf8("2")));
+
+        Assert.assertEquals(2, resultBytesMap.size());
+        Assert.assertEquals(0x01, resultBytesMap.get(new Utf8("1")).get());
+        Assert.assertEquals(0x02, resultBytesMap.get(new Utf8("2")).get());
+    }
+
+    @Test
+    public void shouldReadMapOfJavaStrings() {
+        // given
+        Schema stringMapSchema = Schema.createMap(Schema.create(Schema.Type.STRING));
+        Schema javaStringSchema = Schema.create(Schema.Type.STRING);
+        GenericData.setStringType(javaStringSchema, GenericData.StringType.String);
+        Schema javaStringMapSchema = Schema.createMap(javaStringSchema);
+
+        Map<String, String> stringMap = new HashMap<>(0);
+        stringMap.put("1", "abc");
+        stringMap.put("2", "aaa");
+
+        // when
+        Map<Utf8, String> resultJavaStringMap = deserializeGenericFast(stringMapSchema, javaStringMapSchema,
+                serializeGeneric(stringMap, javaStringMapSchema));
+
+        // then
+        Assert.assertEquals(2, resultJavaStringMap.size());
+        Assert.assertEquals("abc", resultJavaStringMap.get(new Utf8("1")));
+        Assert.assertEquals("aaa", resultJavaStringMap.get(new Utf8("2")));
+    }
+
+    @Test
+    public void shouldReadJavaStringKeyedMapOfRecords() {
+        // given
+        Schema recordSchema = createRecord("record",
+                createPrimitiveUnionFieldSchema("field", Schema.Type.STRING));
+
+        Schema mapRecordSchema = Schema.createMap(recordSchema);
+        GenericData.setStringType(mapRecordSchema, GenericData.StringType.String);
+
+        GenericRecordBuilder subRecordBuilder = new GenericRecordBuilder(recordSchema);
+        subRecordBuilder.set("field", "abc");
+
+        Map<String, GenericData.Record> recordsMap = new HashMap<>();
+        recordsMap.put("1", subRecordBuilder.build());
+        recordsMap.put("2", subRecordBuilder.build());
+
+        // when
+        Map<String, GenericRecord> mapWithStringKeys = deserializeGenericFast(mapRecordSchema, mapRecordSchema, serializeGeneric(recordsMap, mapRecordSchema));
+
+        // then
+        Assert.assertEquals(2, mapWithStringKeys.size());
+        Assert.assertEquals("abc", mapWithStringKeys.get("1").get("field").toString());
+        Assert.assertEquals("abc", mapWithStringKeys.get("2").get("field").toString());
     }
 
     @Test
@@ -621,14 +865,14 @@ public class FastGenericDeserializerGeneratorTest {
         records.put("2", 2);
 
         // when
-        Map<String, Object> map = deserializeGenericFast(mapRecordSchema, mapRecordSchema,
+        Map<Utf8, Object> map = deserializeGenericFast(mapRecordSchema, mapRecordSchema,
                 serializeGeneric(records, mapRecordSchema));
 
         // then
         Assert.assertEquals(3, map.size());
-        Assert.assertEquals("0", map.get("0"));
-        Assert.assertNull(map.get("1"));
-        Assert.assertEquals(2, map.get("2"));
+        Assert.assertEquals("0", map.get(new Utf8("0")).toString());
+        Assert.assertNull(map.get(new Utf8("1")));
+        Assert.assertEquals(2, map.get(new Utf8("2")));
     }
 
     @Test
@@ -648,7 +892,7 @@ public class FastGenericDeserializerGeneratorTest {
 
         // then
         Assert.assertEquals(3, array.size());
-        Assert.assertEquals("0", array.get(0));
+        Assert.assertEquals("0", array.get(0).toString());
         Assert.assertNull(array.get(1));
         Assert.assertEquals(2, array.get(2));
     }

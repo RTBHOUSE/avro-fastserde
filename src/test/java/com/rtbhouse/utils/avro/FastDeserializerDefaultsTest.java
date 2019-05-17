@@ -24,6 +24,7 @@ import org.apache.avro.generic.GenericRecord;
 import org.apache.avro.generic.GenericRecordBuilder;
 import org.apache.avro.io.Decoder;
 import org.apache.avro.specific.SpecificDatumReader;
+import org.apache.avro.util.Utf8;
 import org.junit.Assert;
 import org.junit.Before;
 import org.junit.Test;
@@ -46,7 +47,7 @@ public class FastDeserializerDefaultsTest {
         Path tempPath = Files.createTempDirectory("generated");
         tempDir = tempPath.toFile();
 
-        classLoader = URLClassLoader.newInstance(new URL[] { tempDir.toURI().toURL() },
+        classLoader = URLClassLoader.newInstance(new URL[]{tempDir.toURI().toURL()},
                 FastDeserializerDefaultsTest.class.getClassLoader());
     }
 
@@ -81,14 +82,14 @@ public class FastDeserializerDefaultsTest {
         Assert.assertNull(testRecord.getTestFloatUnion());
         Assert.assertEquals(true, testRecord.getTestBoolean());
         Assert.assertNull(testRecord.getTestBooleanUnion());
-        Assert.assertEquals(ByteBuffer.wrap(new byte[] { 0, 1, 2, 3 }), testRecord.getTestBytes());
+        Assert.assertEquals(ByteBuffer.wrap(new byte[]{0, 1, 2, 3}), testRecord.getTestBytes());
         Assert.assertNull(testRecord.getTestBytesUnion());
         Assert.assertEquals("testStringValue", testRecord.getTestString());
         Assert.assertEquals(new URL("http://www.example.com"), testRecord.getTestStringable());
         Assert.assertNull(testRecord.getTestStringUnion());
-        Assert.assertEquals(new DefaultsFixed(new byte[] { (byte) 0xFF }), testRecord.getTestFixed());
+        Assert.assertEquals(new DefaultsFixed(new byte[]{(byte) 0xFF}), testRecord.getTestFixed());
         Assert.assertNull(testRecord.getTestFixedUnion());
-        Assert.assertEquals(Collections.singletonList(new DefaultsFixed(new byte[] { (byte) 0xFA })),
+        Assert.assertEquals(Collections.singletonList(new DefaultsFixed(new byte[]{(byte) 0xFA})),
                 testRecord.getTestFixedArray());
 
         List listWithNull = new LinkedList();
@@ -157,17 +158,17 @@ public class FastDeserializerDefaultsTest {
         Assert.assertNull(testRecord.get("testFloatUnion"));
         Assert.assertEquals(true, testRecord.get("testBoolean"));
         Assert.assertNull(testRecord.get("testBooleanUnion"));
-        Assert.assertEquals(ByteBuffer.wrap(new byte[] { 0, 1, 2, 3 }), testRecord.get("testBytes"));
+        Assert.assertEquals(ByteBuffer.wrap(new byte[]{0, 1, 2, 3}), testRecord.get("testBytes"));
         Assert.assertNull(testRecord.get("testBytesUnion"));
         Assert.assertEquals("testStringValue", testRecord.get("testString"));
         Assert.assertEquals("http://www.example.com", testRecord.get("testStringable"));
         Assert.assertNull(testRecord.get("testStringUnion"));
-        Assert.assertEquals(new GenericData.Fixed(DefaultsFixed.getClassSchema(), new byte[] { (byte) 0xFF }),
+        Assert.assertEquals(new GenericData.Fixed(DefaultsFixed.getClassSchema(), new byte[]{(byte) 0xFF}),
                 testRecord.get("testFixed"));
         Assert.assertNull(testRecord.get("testFixedUnion"));
         Assert.assertEquals(
                 Collections.singletonList(
-                        new GenericData.Fixed(DefaultsFixed.getClassSchema(), new byte[] { (byte) 0xFA })),
+                        new GenericData.Fixed(DefaultsFixed.getClassSchema(), new byte[]{(byte) 0xFA})),
                 testRecord.get("testFixedArray"));
 
         List listWithNull = new LinkedList();
@@ -259,7 +260,7 @@ public class FastDeserializerDefaultsTest {
         GenericData.EnumSymbol testEnum = new GenericData.EnumSymbol(
                 oldRecordSchema.getField("testEnum").schema(), "A");
         GenericData.Fixed testFixed = new GenericData.Fixed(oldRecordSchema.getField("testFixed").schema(),
-                new byte[] { 0x01 });
+                new byte[]{0x01});
         GenericData.Record oldRecord = new GenericData.Record(oldRecordSchema);
 
         oldRecord.put("testInt", 1);
@@ -267,7 +268,7 @@ public class FastDeserializerDefaultsTest {
         oldRecord.put("testDouble", 1.0);
         oldRecord.put("testFloat", 1.0f);
         oldRecord.put("testBoolean", true);
-        oldRecord.put("testBytes", ByteBuffer.wrap(new byte[] { 0x01, 0x02 }));
+        oldRecord.put("testBytes", ByteBuffer.wrap(new byte[]{0x01, 0x02}));
         oldRecord.put("testString", "aaa");
         oldRecord.put("testFixed", testFixed);
         oldRecord.put("testEnum", testEnum);
@@ -278,8 +279,8 @@ public class FastDeserializerDefaultsTest {
         oldRecord.put("subRecordUnion", subRecord);
         oldRecord.put("subRecord", subRecord);
         oldRecord.put("recordsArray", Collections.singletonList(subRecord));
-        Map<String, GenericData.Record> recordsMap = new HashMap<>();
-        recordsMap.put("1", subRecord);
+        Map<Utf8, GenericData.Record> recordsMap = new HashMap<>();
+        recordsMap.put(new Utf8("1"), subRecord);
         oldRecord.put("recordsMap", recordsMap);
 
         oldRecord.put("testFixedArray", Collections.emptyList());
@@ -300,7 +301,7 @@ public class FastDeserializerDefaultsTest {
         newSubRecord.put("subField", "abc");
         newSubRecord.put("anotherField", "ghi");
         newSubRecord.put("newSubField", "newSubFieldValue");
-        recordsMap.put("1", newSubRecord);
+        recordsMap.put(new Utf8("1"), newSubRecord);
 
         Assert.assertEquals("newSubFieldValue",
                 ((GenericRecord) record.get("subRecordUnion")).get("newSubField").toString());
@@ -310,8 +311,8 @@ public class FastDeserializerDefaultsTest {
         Assert.assertEquals(1.0, record.get("testDouble"));
         Assert.assertEquals(1.0f, record.get("testFloat"));
         Assert.assertEquals(true, record.get("testBoolean"));
-        Assert.assertEquals(ByteBuffer.wrap(new byte[] { 0x01, 0x02 }), record.get("testBytes"));
-        Assert.assertEquals("aaa", record.get("testString"));
+        Assert.assertEquals(ByteBuffer.wrap(new byte[]{0x01, 0x02}), record.get("testBytes"));
+        Assert.assertEquals("aaa", record.get("testString").toString());
         Assert.assertEquals(testFixed, record.get("testFixed"));
         Assert.assertEquals(testEnum, record.get("testEnum"));
         Assert.assertEquals(newSubRecord, record.get("subRecordUnion"));

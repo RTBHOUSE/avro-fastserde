@@ -112,6 +112,6 @@ public class FastDatumReaderTest {
         Assert.assertNotEquals(2, fastGenericDeserializer.getClass().getDeclaredMethods().length);
         Assert.assertEquals(
                 "test",
-                fastGenericDatumReader.read(null, serializeGeneric(recordBuilder.build())).get("test"));
+                fastGenericDatumReader.read(null, serializeGeneric(recordBuilder.build())).get("test").toString());
     }
 }

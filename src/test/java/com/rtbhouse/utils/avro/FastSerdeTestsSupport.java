@@ -10,6 +10,7 @@ import java.util.stream.Collectors;
 
 import org.apache.avro.Schema;
 import org.apache.avro.generic.GenericContainer;
+import org.apache.avro.generic.GenericData;
 import org.apache.avro.generic.GenericDatumReader;
 import org.apache.avro.generic.GenericDatumWriter;
 import org.apache.avro.io.BinaryEncoder;
@@ -23,18 +24,20 @@ import org.codehaus.jackson.node.NullNode;
 
 public final class FastSerdeTestsSupport {
 
+    public static final String NAMESPACE = "com.rtbhouse.utils.generated.avro";
+
     private FastSerdeTestsSupport() {
     }
 
     public static Schema createRecord(String name, Schema.Field... fields) {
-        Schema schema = Schema.createRecord(name, name, "com.adpilot.utils.generated.avro", false);
+        Schema schema = Schema.createRecord(name, name, NAMESPACE, false);
         schema.setFields(Arrays.asList(fields));
 
         return schema;
     }
 
     public static Schema.Field createField(String name, Schema schema) {
-        return new Schema.Field(name, schema, "", null, Schema.Field.Order.ASCENDING);
+        return new Schema.Field(name, schema, "", (Object) null, Schema.Field.Order.ASCENDING);
     }
 
     public static Schema.Field createUnionField(String name, Schema... schemas) {
@@ -43,38 +46,38 @@ public final class FastSerdeTestsSupport {
         typeList.addAll(Arrays.asList(schemas));
 
         Schema unionSchema = Schema.createUnion(typeList);
-        return new Schema.Field(name, unionSchema, null, NullNode.getInstance(), Schema.Field.Order.ASCENDING);
+        return new Schema.Field(name, unionSchema, null, Schema.Field.Order.ASCENDING);
     }
 
     public static Schema.Field createPrimitiveFieldSchema(String name, Schema.Type type) {
-        return new Schema.Field(name, Schema.create(type), null, null);
+        return new Schema.Field(name, Schema.create(type), null, (Object) null);
     }
 
     public static Schema.Field createPrimitiveUnionFieldSchema(String name, Schema.Type... types) {
         List<Schema> typeList = new ArrayList<>();
         typeList.add(Schema.create(Schema.Type.NULL));
-        typeList.addAll(Arrays.asList(types).stream().map(Schema::create).collect(Collectors.toList()));
+        typeList.addAll(Arrays.stream(types).map(Schema::create).collect(Collectors.toList()));
 
         Schema unionSchema = Schema.createUnion(typeList);
-        return new Schema.Field(name, unionSchema, null, NullNode.getInstance(), Schema.Field.Order.ASCENDING);
+        return new Schema.Field(name, unionSchema, null, (Object) null, Schema.Field.Order.ASCENDING);
     }
 
     public static Schema.Field createArrayFieldSchema(String name, Schema elementType, String... aliases) {
-        return addAliases(new Schema.Field(name, Schema.createArray(elementType), null, null,
+        return addAliases(new Schema.Field(name, Schema.createArray(elementType), null, (Object) null,
             Schema.Field.Order.ASCENDING), aliases);
     }
 
     public static Schema.Field createMapFieldSchema(String name, Schema valueType, String... aliases) {
-        return addAliases(new Schema.Field(name, Schema.createMap(valueType), null, null,
+        return addAliases(new Schema.Field(name, Schema.createMap(valueType), null, (Object) null,
             Schema.Field.Order.ASCENDING), aliases);
     }
 
     public static Schema createFixedSchema(String name, int size) {
-        return Schema.createFixed(name, "", "com.adpilot.utils.generated.avro", size);
+        return Schema.createFixed(name, "", NAMESPACE, size);
     }
 
     public static Schema createEnumSchema(String name, String[] ordinals) {
-        return Schema.createEnum(name, "", "com.adpilot.utils.generated.avro", Arrays.asList(ordinals));
+        return Schema.createEnum(name, "", NAMESPACE, Arrays.asList(ordinals));
     }
 
     public static Schema createUnionSchema(Schema... schemas) {
@@ -158,11 +161,11 @@ public final class FastSerdeTestsSupport {
 
         record.put("testFixed", new com.rtbhouse.utils.generated.avro.TestFixed(new byte[] { 0x01 }));
         record.put("testFixedArray", Collections.EMPTY_LIST);
-        record.put("testFixedUnionArray", Arrays.asList(new com.rtbhouse.utils.generated.avro.TestFixed(new byte[] { 0x01 })));
+        record.put("testFixedUnionArray", Collections.singletonList(new com.rtbhouse.utils.generated.avro.TestFixed(new byte[] { 0x01 })));
 
         record.put("testEnum", com.rtbhouse.utils.generated.avro.TestEnum.A);
         record.put("testEnumArray", Collections.EMPTY_LIST);
-        record.put("testEnumUnionArray", Arrays.asList(com.rtbhouse.utils.generated.avro.TestEnum.A));
+        record.put("testEnumUnionArray", Collections.singletonList(com.rtbhouse.utils.generated.avro.TestEnum.A));
         record.put("subRecord", new com.rtbhouse.utils.generated.avro.SubRecord());
 
         record.put("recordsArray", Collections.emptyList());
@@ -171,7 +174,7 @@ public final class FastSerdeTestsSupport {
         record.put("recordsMapArray", Collections.emptyMap());
 
         record.put("testInt", 1);
-        record.put("testLong", 1l);
+        record.put("testLong", 1L);
         record.put("testDouble", 1.0);
         record.put("testFloat", 1.0f);
         record.put("testBoolean", true);
