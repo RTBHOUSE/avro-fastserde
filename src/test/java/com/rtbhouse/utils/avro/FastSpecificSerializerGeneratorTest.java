@@ -19,6 +19,7 @@ import java.util.Map;
 
 import org.apache.avro.Schema;
 import org.apache.avro.generic.GenericContainer;
+import org.apache.avro.generic.GenericData;
 import org.apache.avro.io.BinaryEncoder;
 import org.apache.avro.io.Decoder;
 import org.apache.avro.io.DecoderFactory;
@@ -292,6 +293,7 @@ public class FastSpecificSerializerGeneratorTest {
     public void shouldWriteMapOfRecords() {
         // given
         Schema mapRecordSchema = Schema.createMap(TestRecord.getClassSchema());
+        GenericData.setStringType(mapRecordSchema, GenericData.StringType.String);
 
         TestRecord testRecord = emptyTestRecord();
         testRecord.put("testString", "abc");
@@ -301,17 +303,18 @@ public class FastSpecificSerializerGeneratorTest {
         recordsMap.put("2", testRecord);
 
         // when
-        Map<Utf8, TestRecord> map = deserializeSpecific(mapRecordSchema,
+        Map<String, TestRecord> map = deserializeSpecific(mapRecordSchema,
                 serializeSpecificFast(recordsMap, mapRecordSchema));
 
         // then
         Assert.assertEquals(2, map.size());
-        Assert.assertEquals("abc", map.get(new Utf8("1")).get("testString"));
-        Assert.assertEquals("abc", map.get(new Utf8("2")).get("testString"));
+        Assert.assertEquals("abc", map.get("1").get("testString"));
+        Assert.assertEquals("abc", map.get("2").get("testString"));
 
         // given
         mapRecordSchema = Schema.createMap(createUnionSchema(TestRecord
                 .getClassSchema()));
+        GenericData.setStringType(mapRecordSchema, GenericData.StringType.String);
 
         testRecord = emptyTestRecord();
         testRecord.put("testString", "abc");
@@ -325,8 +328,8 @@ public class FastSpecificSerializerGeneratorTest {
 
         // then
         Assert.assertEquals(2, map.size());
-        Assert.assertEquals("abc", map.get(new Utf8("1")).get("testString"));
-        Assert.assertEquals("abc", map.get(new Utf8("2")).get("testString"));
+        Assert.assertEquals("abc", map.get("1").get("testString"));
+        Assert.assertEquals("abc", map.get("2").get("testString"));
     }
 
     @Test
@@ -345,7 +348,7 @@ public class FastSpecificSerializerGeneratorTest {
 
         // then
         Assert.assertEquals(3, map.size());
-        Assert.assertEquals(new Utf8("0"), map.get(new Utf8("0")));
+        Assert.assertEquals("0", map.get(new Utf8("0")).toString());
         Assert.assertNull(map.get(new Utf8("1")));
         Assert.assertEquals(2, map.get(new Utf8("2")));
     }

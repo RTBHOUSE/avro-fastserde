@@ -30,11 +30,14 @@ public class FastSerializerGenerator<T> extends FastSerializerGeneratorBase<T> {
     private final Map<String, JMethod> serializeMethodMap = new HashMap<>();
     private final SchemaAssistant schemaAssistant;
 
+    private final JClass string;
+
     public FastSerializerGenerator(boolean useGenericTypes, Schema schema, File destination, ClassLoader classLoader,
-            String compileClassPath) {
+                                   String compileClassPath) {
         super(schema, destination, classLoader, compileClassPath);
         this.useGenericTypes = useGenericTypes;
-        this.schemaAssistant = new SchemaAssistant(codeModel, useGenericTypes);
+        this.schemaAssistant = new SchemaAssistant(codeModel, useGenericTypes, true);
+        this.string = codeModel.ref(String.class);
     }
 
     @Override
@@ -48,29 +51,29 @@ public class FastSerializerGenerator<T> extends FastSerializerGeneratorBase<T> {
             final JMethod serializeMethod = serializerClass.method(JMod.PUBLIC, void.class, "serialize");
             final JVar serializeMethodParam;
 
-            JClass outputClass = schemaAssistant.classFromSchema(schema);
-            serializerClass._implements(codeModel.ref(FastSerializer.class).narrow(outputClass));
-            serializeMethodParam = serializeMethod.param(outputClass, "data");
+            JClass inputClass = schemaAssistant.classFromSchema(schema);
+            serializerClass._implements(codeModel.ref(FastSerializer.class).narrow(inputClass));
+            serializeMethodParam = serializeMethod.param(inputClass, "data");
 
             switch (schema.getType()) {
-            case RECORD:
-                processRecord(schema, serializeMethodParam, serializeMethod.body());
-                break;
-            case ARRAY:
-                processArray(schema, serializeMethodParam, serializeMethod.body());
-                break;
-            case MAP:
-                processMap(schema, serializeMethodParam, serializeMethod.body());
-                break;
-            default:
-                throw new FastSerializerGeneratorException("Unsupported input schema type: " + schema.getType());
+                case RECORD:
+                    processRecord(schema, serializeMethodParam, serializeMethod.body());
+                    break;
+                case ARRAY:
+                    processArray(schema, serializeMethodParam, serializeMethod.body());
+                    break;
+                case MAP:
+                    processMap(schema, serializeMethodParam, serializeMethod.body());
+                    break;
+                default:
+                    throw new FastSerializerGeneratorException("Unsupported input schema type: " + schema.getType());
             }
 
             serializeMethod.param(codeModel.ref(Encoder.class), ENCODER);
             serializeMethod._throws(codeModel.ref(IOException.class));
 
             final Class<FastSerializer<T>> clazz = compileClass(className);
-            return clazz.newInstance();
+            return clazz.getConstructor().newInstance();
         } catch (JClassAlreadyExistsException e) {
             throw new FastSerializerGeneratorException("Class: " + className + " already exists");
         } catch (Exception e) {
@@ -80,34 +83,34 @@ public class FastSerializerGenerator<T> extends FastSerializerGeneratorBase<T> {
 
     private void processComplexType(Schema schema, JExpression valueExpr, JBlock body) {
         switch (schema.getType()) {
-        case RECORD:
-            processRecord(schema, valueExpr, body);
-            break;
-        case ARRAY:
-            processArray(schema, valueExpr, body);
-            break;
-        case UNION:
-            processUnion(schema, valueExpr, body);
-            break;
-        case MAP:
-            processMap(schema, valueExpr, body);
-            break;
-        default:
-            throw new FastSerializerGeneratorException("Not a complex schema type: " + schema.getType());
+            case RECORD:
+                processRecord(schema, valueExpr, body);
+                break;
+            case ARRAY:
+                processArray(schema, valueExpr, body);
+                break;
+            case UNION:
+                processUnion(schema, valueExpr, body);
+                break;
+            case MAP:
+                processMap(schema, valueExpr, body);
+                break;
+            default:
+                throw new FastSerializerGeneratorException("Not a complex schema type: " + schema.getType());
         }
 
     }
 
     private void processSimpleType(Schema schema, JExpression valueExpression, JBlock body) {
         switch (schema.getType()) {
-        case ENUM:
-            processEnum(schema, valueExpression, body);
-            break;
-        case FIXED:
-            processFixed(schema, valueExpression, body);
-            break;
-        default:
-            processPrimitive(schema, valueExpression, body);
+            case ENUM:
+                processEnum(schema, valueExpression, body);
+                break;
+            case FIXED:
+                processFixed(schema, valueExpression, body);
+                break;
+            default:
+                processPrimitive(schema, valueExpression, body);
         }
     }
 
@@ -167,13 +170,13 @@ public class FastSerializerGenerator<T> extends FastSerializerGeneratorBase<T> {
         } else {
             processSimpleType(elementSchema, arrayExpr.invoke("get").arg(counter), forBody);
         }
+
         body.invoke(JExpr.direct(ENCODER), "writeArrayEnd");
     }
 
     private void processMap(final Schema mapSchema, JExpression mapExpr, JBlock body) {
 
         final JClass mapClass = schemaAssistant.classFromSchema(mapSchema);
-
         JClass keyClass = schemaAssistant.keyClassFromMapSchema(mapSchema);
 
         body.invoke(JExpr.direct(ENCODER), "writeMapStart");
@@ -196,7 +199,7 @@ public class FastSerializerGenerator<T> extends FastSerializerGeneratorBase<T> {
 
         JVar keyStringVar;
         if (SchemaAssistant.hasStringableKey(mapSchema)) {
-            keyStringVar = forBody.decl(codeModel.ref(String.class), getVariableName("keyString"),
+            keyStringVar = forBody.decl(string, getVariableName("keyString"),
                     mapKeysLoop.var().invoke("toString"));
         } else {
             keyStringVar = mapKeysLoop.var();
@@ -236,24 +239,27 @@ public class FastSerializerGenerator<T> extends FastSerializerGeneratorBase<T> {
             JClass optionClass = schemaAssistant.classFromSchema(schemaOption);
             JClass rawOptionClass = schemaAssistant.classFromSchema(schemaOption, true, true);
             JExpression condition = unionExpr._instanceof(rawOptionClass);
+
             if (useGenericTypes && SchemaAssistant.isNamedType(schemaOption)) {
                 condition = condition.cand(JExpr.invoke(JExpr.lit(schemaOption.getFullName()), "equals")
                         .arg(JExpr.invoke(JExpr.cast(optionClass, unionExpr), "getSchema").invoke("getFullName")));
             }
+
             ifBlock = ifBlock != null ? ifBlock._elseif(condition) : body._if(condition);
             JBlock thenBlock = ifBlock._then();
             thenBlock.invoke(JExpr.direct(ENCODER), "writeIndex")
                     .arg(JExpr.lit(unionSchema.getIndexNamed(schemaOption.getFullName())));
+
             switch (schemaOption.getType()) {
-            case UNION:
-            case NULL:
-                throw new FastSerializerGeneratorException("Incorrect union subschema processing: " + schemaOption);
-            default:
-                if (SchemaAssistant.isComplexType(schemaOption)) {
-                    processComplexType(schemaOption, JExpr.cast(optionClass, unionExpr), thenBlock);
-                } else {
-                    processSimpleType(schemaOption, unionExpr, thenBlock);
-                }
+                case UNION:
+                case NULL:
+                    throw new FastSerializerGeneratorException("Incorrect union subschema processing: " + schemaOption);
+                default:
+                    if (SchemaAssistant.isComplexType(schemaOption)) {
+                        processComplexType(schemaOption, JExpr.cast(optionClass, unionExpr), thenBlock);
+                    } else {
+                        processSimpleType(schemaOption, unionExpr, thenBlock);
+                    }
             }
         }
     }
@@ -282,34 +288,35 @@ public class FastSerializerGenerator<T> extends FastSerializerGeneratorBase<T> {
         String writeFunction;
         JClass primitiveClass = schemaAssistant.classFromSchema(primitiveSchema);
         JExpression castedValue = JExpr.cast(primitiveClass, primitiveValueExpression);
+
         switch (primitiveSchema.getType()) {
-        case STRING:
-            writeFunction = "writeString";
-            if (SchemaAssistant.isStringable(primitiveSchema)) {
-                castedValue = JExpr.cast(codeModel.ref(String.class), castedValue.invoke("toString"));
-            }
-            break;
-        case BYTES:
-            writeFunction = "writeBytes";
-            break;
-        case INT:
-            writeFunction = "writeInt";
-            break;
-        case LONG:
-            writeFunction = "writeLong";
-            break;
-        case FLOAT:
-            writeFunction = "writeFloat";
-            break;
-        case DOUBLE:
-            writeFunction = "writeDouble";
-            break;
-        case BOOLEAN:
-            writeFunction = "writeBoolean";
-            break;
-        default:
-            throw new FastSerializerGeneratorException(
-                    "Unsupported primitive schema of type: " + primitiveSchema.getType());
+            case STRING:
+                writeFunction = "writeString";
+                if (SchemaAssistant.isStringable(primitiveSchema)) {
+                    castedValue = JExpr.cast(string, castedValue.invoke("toString"));
+                }
+                break;
+            case BYTES:
+                writeFunction = "writeBytes";
+                break;
+            case INT:
+                writeFunction = "writeInt";
+                break;
+            case LONG:
+                writeFunction = "writeLong";
+                break;
+            case FLOAT:
+                writeFunction = "writeFloat";
+                break;
+            case DOUBLE:
+                writeFunction = "writeDouble";
+                break;
+            case BOOLEAN:
+                writeFunction = "writeBoolean";
+                break;
+            default:
+                throw new FastSerializerGeneratorException(
+                        "Unsupported primitive schema of type: " + primitiveSchema.getType());
         }
 
         body.invoke(JExpr.direct(ENCODER), writeFunction).arg(castedValue);
