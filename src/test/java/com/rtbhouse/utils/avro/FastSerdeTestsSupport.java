@@ -10,7 +10,6 @@ import java.util.stream.Collectors;
 
 import org.apache.avro.Schema;
 import org.apache.avro.generic.GenericContainer;
-import org.apache.avro.generic.GenericData;
 import org.apache.avro.generic.GenericDatumReader;
 import org.apache.avro.generic.GenericDatumWriter;
 import org.apache.avro.io.BinaryEncoder;
@@ -20,7 +19,6 @@ import org.apache.avro.io.EncoderFactory;
 import org.apache.avro.specific.SpecificDatumReader;
 import org.apache.avro.specific.SpecificDatumWriter;
 import org.apache.avro.specific.SpecificRecord;
-import org.codehaus.jackson.node.NullNode;
 
 public final class FastSerdeTestsSupport {
 
@@ -46,7 +44,7 @@ public final class FastSerdeTestsSupport {
         typeList.addAll(Arrays.asList(schemas));
 
         Schema unionSchema = Schema.createUnion(typeList);
-        return new Schema.Field(name, unionSchema, null, Schema.Field.Order.ASCENDING);
+        return new Schema.Field(name, unionSchema, null, (Object) null, Schema.Field.Order.ASCENDING);
     }
 
     public static Schema.Field createPrimitiveFieldSchema(String name, Schema.Type type) {

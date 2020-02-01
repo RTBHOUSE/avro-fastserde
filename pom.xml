@@ -4,7 +4,7 @@
 
     <groupId>com.rtbhouse</groupId>
     <artifactId>avro-fastserde</artifactId>
-    <version>1.0.5</version>
+    <version>1.0.6-SNAPSHOT</version>
     <packaging>jar</packaging>
 
     <name>avro-fastserde</name>
@@ -71,7 +71,7 @@
         <guava.version>19.0</guava.version>
         <apache.commons-lang3.version>3.4</apache.commons-lang3.version>
         <code.model.version>2.6</code.model.version>
-        <avro.version>1.8.2</avro.version>
+        <avro.version>1.9.1</avro.version>
         <benchmark.skip>true</benchmark.skip>
     </properties>
 

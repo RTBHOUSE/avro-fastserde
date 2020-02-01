@@ -17,9 +17,10 @@ import org.apache.avro.Schema;
 import org.apache.avro.io.Decoder;
 import org.apache.avro.io.parsing.ResolvingGrammarGenerator;
 import org.apache.avro.io.parsing.Symbol;
+import org.apache.avro.util.internal.Accessor;
 import org.apache.commons.lang3.StringUtils;
-import org.codehaus.jackson.JsonNode;
 
+import com.fasterxml.jackson.databind.JsonNode;
 import com.sun.codemodel.JArray;
 import com.sun.codemodel.JBlock;
 import com.sun.codemodel.JCatchBlock;
@@ -286,7 +287,7 @@ public class FastDeserializerGenerator<T> extends FastDeserializerGeneratorBase<
                         schemaVar = declareSchemaVariableForRecordField(readerField.name(), readerField.schema(),
                                 recordSchemaVar);
                     }
-                    JExpression value = parseDefaultValue(readerField.schema(), readerField.defaultValue(), methodBody,
+                    JExpression value = parseDefaultValue(readerField.schema(), Accessor.defaultValue(readerField), methodBody,
                             schemaVar, readerField.name());
                     methodBody.invoke(result, "put").arg(JExpr.lit(readerField.pos())).arg(value);
                 }
@@ -338,7 +339,7 @@ public class FastDeserializerGenerator<T> extends FastDeserializerGeneratorBase<
                 }
                 valueVar = body.decl(defaultValueClass, getVariableName("default" + schema.getName()),
                         valueInitializationExpr);
-                for (Iterator<Map.Entry<String, JsonNode>> it = defaultValue.getFields(); it.hasNext();) {
+                for (Iterator<Map.Entry<String, JsonNode>> it = defaultValue.fields(); it.hasNext();) {
                     Map.Entry<String, JsonNode> subFieldEntry = it.next();
                     Schema.Field subField = schema.getField(subFieldEntry.getKey());
 
@@ -378,7 +379,7 @@ public class FastDeserializerGenerator<T> extends FastDeserializerGeneratorBase<
 
                 valueVar = body.decl(defaultValueClass, getVariableName("defaultMap"), valueInitializationExpr);
 
-                for (Iterator<Map.Entry<String, JsonNode>> it = defaultValue.getFields(); it.hasNext();) {
+                for (Iterator<Map.Entry<String, JsonNode>> it = defaultValue.fields(); it.hasNext();) {
                     Map.Entry<String, JsonNode> mapEntry = it.next();
                     JExpression mapKeyExpr;
                     if (SchemaAssistant.hasStringableKey(schema)) {
@@ -399,32 +400,32 @@ public class FastDeserializerGenerator<T> extends FastDeserializerGeneratorBase<
         } else {
             switch (schemaType) {
             case ENUM:
-                return schemaAssistant.getEnumValueByName(schema, JExpr.lit(defaultValue.getTextValue()),
+                return schemaAssistant.getEnumValueByName(schema, JExpr.lit(defaultValue.textValue()),
                         getSchemaExpr(schema));
             case FIXED:
                 JArray fixedBytesArray = JExpr.newArray(codeModel.BYTE);
-                for (char b : defaultValue.getTextValue().toCharArray()) {
+                for (char b : defaultValue.textValue().toCharArray()) {
                     fixedBytesArray.add(JExpr.lit((byte) b));
                 }
                 return schemaAssistant.getFixedValue(schema, fixedBytesArray, getSchemaExpr(schema));
             case BYTES:
                 JArray bytesArray = JExpr.newArray(codeModel.BYTE);
-                for (byte b : defaultValue.getTextValue().getBytes()) {
+                for (byte b : defaultValue.textValue().getBytes()) {
                     bytesArray.add(JExpr.lit(b));
                 }
                 return codeModel.ref(ByteBuffer.class).staticInvoke("wrap").arg(bytesArray);
             case STRING:
-                return schemaAssistant.getStringableValue(schema, JExpr.lit(defaultValue.getTextValue()));
+                return schemaAssistant.getStringableValue(schema, JExpr.lit(defaultValue.textValue()));
             case INT:
-                return JExpr.lit(defaultValue.getIntValue());
+                return JExpr.lit(defaultValue.intValue());
             case LONG:
-                return JExpr.lit(defaultValue.getLongValue());
+                return JExpr.lit(defaultValue.longValue());
             case FLOAT:
-                return JExpr.lit((float) defaultValue.getDoubleValue());
+                return JExpr.lit((float) defaultValue.doubleValue());
             case DOUBLE:
-                return JExpr.lit(defaultValue.getDoubleValue());
+                return JExpr.lit(defaultValue.doubleValue());
             case BOOLEAN:
-                return JExpr.lit(defaultValue.getBooleanValue());
+                return JExpr.lit(defaultValue.booleanValue());
             case NULL:
             default:
                 throw new FastDeserializerGeneratorException("Incorrect schema type in default value!");
@@ -470,9 +471,14 @@ public class FastDeserializerGenerator<T> extends FastDeserializerGeneratorBase<
                     throw new FastDeserializerGeneratorException("Unable to determine action for field: " + name);
                 }
 
-                Symbol.UnionAdjustAction unionAdjustAction = (Symbol.UnionAdjustAction) alternative.symbols[i].production[0];
-                unionAction = FieldAction.fromValues(optionSchema.getType(), action.getShouldRead(),
-                        unionAdjustAction.symToParse);
+                if (alternative.symbols[i].production != null && alternative.symbols[i].production[0] instanceof Symbol.UnionAdjustAction) {
+                    Symbol.UnionAdjustAction unionAdjustAction = (Symbol.UnionAdjustAction) alternative.symbols[i].production[0];
+                    unionAction = FieldAction.fromValues(optionSchema.getType(), action.getShouldRead(),
+                            unionAdjustAction.symToParse);
+                } else {
+                    unionAction = FieldAction.fromValues(optionSchema.getType(), action.getShouldRead(),
+                            alternative.symbols[i]);
+                }
             } else {
                 unionAction = FieldAction.fromValues(optionSchema.getType(), false, EMPTY_SYMBOL);
             }
@@ -712,13 +718,15 @@ public class FastDeserializerGenerator<T> extends FastDeserializerGeneratorBase<
             }
 
             boolean enumOrderCorrect = true;
-            for (int i = 0; i < enumAdjustAction.adjustments.length; i++) {
-                Object adjustment = enumAdjustAction.adjustments[i];
-                if (adjustment instanceof String) {
-                    throw new FastDeserializerGeneratorException(
-                            schema.getName() + " enum label impossible to deserialize: " + adjustment.toString());
-                } else if (!adjustment.equals(i)) {
-                    enumOrderCorrect = false;
+            if (enumAdjustAction != null && enumAdjustAction.adjustments != null) {
+                for (int i = 0; i < enumAdjustAction.adjustments.length; i++) {
+                    Object adjustment = enumAdjustAction.adjustments[i];
+                    if (adjustment instanceof String) {
+                        throw new FastDeserializerGeneratorException(
+                                schema.getName() + " enum label impossible to deserialize: " + adjustment.toString());
+                    } else if (!adjustment.equals(i)) {
+                        enumOrderCorrect = false;
+                    }
                 }
             }
 
