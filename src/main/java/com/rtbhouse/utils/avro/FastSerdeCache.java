@@ -199,8 +199,9 @@ public final class FastSerdeCache {
         FastDeserializer<?> deserializer = fastSpecificRecordDeserializersCache.get(schemaKey);
 
         if (deserializer == null) {
+            SpecificDatumReader<?> fallbackReader = new SpecificDatumReader<>(writerSchema, readerSchema);
             deserializer = fastSpecificRecordDeserializersCache.putIfAbsent(schemaKey,
-                    d -> new SpecificDatumReader<>(writerSchema, readerSchema).read(null, d));
+                    d -> fallbackReader.read(null, d));
             if (deserializer == null) {
                 deserializer = fastSpecificRecordDeserializersCache.get(schemaKey);
                 CompletableFuture
@@ -228,9 +229,10 @@ public final class FastSerdeCache {
         FastDeserializer<?> deserializer = fastGenericRecordDeserializersCache.get(schemaKey);
 
         if (deserializer == null) {
+            GenericDatumReader<?> fallbackReader = new GenericDatumReader<>(writerSchema, readerSchema);
             deserializer = fastGenericRecordDeserializersCache.putIfAbsent(
                     schemaKey,
-                    d -> new GenericDatumReader<>(writerSchema, readerSchema).read(null, d));
+                    d -> fallbackReader.read(null, d));
             if (deserializer == null) {
                 deserializer = fastGenericRecordDeserializersCache.get(schemaKey);
                 CompletableFuture
@@ -254,9 +256,10 @@ public final class FastSerdeCache {
         String schemaKey = getSchemaKey(schema, schema);
         FastSerializer<?> serializer = fastSpecificRecordSerializersCache.get(schemaKey);
         if (serializer == null) {
+            SpecificDatumWriter<Object> fallbackWriter = new SpecificDatumWriter<>(schema);
             serializer = fastSpecificRecordSerializersCache.putIfAbsent(
                     schemaKey,
-                    (d, e) -> new SpecificDatumWriter<>(schema).write(d, e));
+                    (d, e) -> fallbackWriter.write(d, e));
             if (serializer == null) {
                 serializer = fastSpecificRecordSerializersCache.get(schemaKey);
                 CompletableFuture
@@ -282,9 +285,10 @@ public final class FastSerdeCache {
 
         FastSerializer<?> serializer = fastGenericRecordSerializersCache.get(schemaKey);
         if (serializer == null) {
+            GenericDatumWriter<Object> fallbackWriter = new GenericDatumWriter<>(schema);
             serializer = fastGenericRecordSerializersCache.putIfAbsent(
                     schemaKey,
-                    (d, e) -> new GenericDatumWriter<>(schema).write(d, e));
+                    (d, e) -> fallbackWriter.write(d, e));
             if (serializer == null) {
                 serializer = fastGenericRecordSerializersCache.get(schemaKey);
                 CompletableFuture
