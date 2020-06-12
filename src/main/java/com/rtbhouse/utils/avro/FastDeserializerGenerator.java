@@ -537,7 +537,7 @@ public class FastDeserializerGenerator<T> extends FastDeserializerGeneratorBase<
         JConditional conditional = parentBody._if(chunkLen.gt(JExpr.lit(0)));
         JBlock ifBlock = conditional._then();
 
-        JClass arrayClass = schemaAssistant.classFromSchema(readerArraySchema, false);
+        JClass arrayClass = schemaAssistant.classFromSchema(action.getShouldRead() ? readerArraySchema : arraySchema, false);
 
         if (action.getShouldRead()) {
             JInvocation newArrayExp = JExpr._new(arrayClass);
@@ -633,7 +633,7 @@ public class FastDeserializerGenerator<T> extends FastDeserializerGeneratorBase<
         forLoop.update(counter.incr());
         JBlock forBody = forLoop.body();
 
-        JClass keyClass = schemaAssistant.keyClassFromMapSchema(readerMapSchema);
+        JClass keyClass = schemaAssistant.keyClassFromMapSchema(action.getShouldRead() ? readerMapSchema : mapSchema);
         JExpression keyValueExpression = (string.equals(keyClass)) ?
                 JExpr.direct(DECODER + ".readString()")
                 : JExpr.direct(DECODER + ".readString(null)");
