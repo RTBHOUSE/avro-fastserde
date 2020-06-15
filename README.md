@@ -1,12 +1,15 @@
 # avro-fastserde
 
-**avro-fastserde** is an alternative approach to [Apache Avro](http://avro.apache.org/) serialization and deserialization. It generates dedicated code responsible for handling serialization and deserialization, which achieves better performance results than native implementation. Learn more [here](http://techblog.rtbhouse.com/2017/04/18/fast-avro/).  
+**avro-fastserde** is an alternative approach to [Apache Avro](http://avro.apache.org/) serialization and deserialization. It generates dedicated code responsible for handling serialization and deserialization, which achieves better performance results than native implementation. Learn more [here](http://techblog.rtbhouse.com/2017/04/18/fast-avro/). 
 
 ![build status](https://api.travis-ci.org/RTBHOUSE/avro-fastserde.svg?branch=master)
+## Deprecation info
+
+All users are encouraged to switch to [linkedin/avro-util](https://github.com/linkedin/avro-util) project which has incorporated and extended functionalities that have originated from this project. All fixes and improvements will happen now through the avro-util fork of this library. 
 
 ## Version
 
-Current version is **1.0.6**
+Current version is **1.0.7**. This is the final official release of this project.
 
 ## Requirements
 
@@ -20,7 +23,7 @@ Releases are distributed on Maven central:
 <dependency>
     <groupId>com.rtbhouse</groupId>
     <artifactId>avro-fastserde</artifactId>
-    <version>1.0.6</version>
+    <version>1.0.7</version>
 </dependency>
 ```
 
@@ -76,3 +79,4 @@ FastGenericDatumReader<GenericData.Record> fastGenericDatumReader = new FastGene
 - no support for `reuse` parameter in `DatumReader` interface.
 - no support for `SchemaConstructable` marker interface for specific Avro records.
 - `FastSpecificDatumReader` will not read data into `GenericRecord` if the specific classes are not available but will result in compilation failure and fall back to default `SpecificDatumReader` implementation.
+
