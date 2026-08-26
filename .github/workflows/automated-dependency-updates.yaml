@@ -10,9 +10,10 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      - uses: rtbhouse-platform-engineering/renovate-scanner/.github/actions/run-renovate@261480b2d6b5bb71fc7276c976a8e202f124de76 # v0.1.1
+      - uses: rtbhouse-platform-engineering/renovate-scanner/.github/actions/run-renovate@474d3c935be08e8f838961ef759fae98c1d2212b # v0.3.2
         with:
           gh-renovate-config-preset-app-id: ${{ vars.GH_READER_APP_ID }}
           gh-renovate-config-preset-app-private-key: ${{ secrets.GH_READER_APP_PRIVATE_KEY }}
           gh-renovate-app-id: ${{ vars.GH_RENOVATE_APP_ID }}
           gh-renovate-app-private-key: ${{ secrets.GH_RENOVATE_APP_PRIVATE_KEY }}
+          extra-lookup-repositories: ${{ vars.RENOVATE_EXTRA_LOOKUP_REPOSITORIES }}
