@@ -1,4 +1,8 @@
 name: Automated dependency updates
+
+permissions:
+  contents: read
+
 on:
   schedule:
     - cron: "0 5 * * *"
